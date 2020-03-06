@@ -21,6 +21,7 @@ NFSEXPORT=$2
 TEST=$3 # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops'
 RUNTIME=$4 # runtime in seconds of the test.
 JOBS=$5 # how many threads per host. This will also result in N mountpoints per host (up to the total number of VIPs in the vast cluster.)
+POOL=$6 # what pool to run on, typically this will be '1', but check!
 
 REMOTE_PATH="fio" # change this to whatever you need it to be.
 
@@ -41,9 +42,12 @@ FIO_BIN=/usr/bin/fio
 ioengine=libaio
 #ioengine=psync
 
+iodepth=8
+
+
 
 #pick the ID of the vip pool you want to use..most of the time it will be '1'
-POOL=1
+
 #
 #
 ###end vars.###
@@ -101,7 +105,7 @@ MD_DIRS=()
 for i in ${needed_vips[@]}
         do sudo mkdir -p ${MOUNT}/${i}
         if [[ ${NFS} == "rdma" ]] ; then
-          sudo mount -vvv -t nfs -o proto=rdma,port=20049 ${i}:/${NFSEXPORT} ${MOUNT}/${i}
+          sudo mount -vvv -t nfs -o proto=rdma,port=20049,vers=3 ${i}:/${NFSEXPORT} ${MOUNT}/${i}
         else
           sudo mount -vvv -t nfs -o tcp,rw,vers=3 ${i}:/${NFSEXPORT} ${MOUNT}/${i}
         fi
@@ -116,29 +120,30 @@ done
 echo ${DIRS}
 
 write_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=4 --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 
 }
 
 
 read_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=6 --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=100 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=100 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 
 write_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=4 --rw=randrw --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 
 }
 
 read_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=4 --rw=randrw --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=100 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=100 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 read_bw_reuse_test () {
-  rando_dir=${MOUNT}/${all_vips[0]}/${REMOTE_PATH}/${node}
+  #rando_dir=${MOUNT}/${all_vips[0]}/${REMOTE_PATH}/${node}
+  rando_dir=${MOUNT}/${all_vips[0]}/${REMOTE_PATH}
   echo ${rando_dir}
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=6 --rw=randrw --bs=1mb --direct=1 --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
 }
 
 
