@@ -4,9 +4,9 @@
 # make sure FIO is installed, put the path in the FIO_BIN variable.
 # you don't _need_ clustershell/clush , but it makes it easier to run this on multiple hosts.
 # 1.  put this script on client-1
-# 2.  Run it like this 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1'  <--- this will ONLY run on client, and will read_bw test for 120 seconds, with 8 numjobs.
+# 2.  Run it like this 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcp'  <--- this will ONLY run on client, and will read_bw test for 120 seconds, with 8 numjobs.
 # 3.  Once you verify it works, copy to all cnodes: `clush -g clients -c /home/vastdata/vast-perf.sh`
-# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 read_bw 120 8 1 rdma'`
+# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 read_bw 120 8 1 tcp'`
 
 
 ###Notes
@@ -22,7 +22,7 @@ TEST=$3 # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops'
 RUNTIME=$4 # runtime in seconds of the test.
 JOBS=$5 # how many threads per host. This will also result in N mountpoints per host (up to the total number of VIPs in the vast cluster.)
 POOL=$6 # what pool to run on, typically this will be '1', but check!
-NFS=$7
+NFS=$7 #rdma or tcp
 
 REMOTE_PATH="fio" # change this to whatever you need it to be.
 
