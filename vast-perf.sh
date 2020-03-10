@@ -34,7 +34,7 @@ DELETE_RUN=0
 #set this to 1 if you want to delete everything that this script may have created previously.
 DELETE_ALL=0
 
-MOUNT=/mnt/demo #where the mountpoints will get created.
+MOUNT=/mnt/fiodemo #where the mountpoints will get created.
 
 FIO_BIN=/usr/bin/fio
 
