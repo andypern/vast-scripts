@@ -24,7 +24,7 @@ JOBS=$5 # how many threads per host. This will also result in N mountpoints per 
 POOL=$6 # what pool to run on, typically this will be '1', but check!
 NFS=$7 #rdma or tcp
 
-REMOTE_PATH="fio" # change this to whatever you need it to be.
+REMOTE_PATH="fio" # change this to whatever you need it to be. This is the subdir underneath the export which will be created.
 
 
 ###other variables you can set.
@@ -41,10 +41,14 @@ FIO_BIN=/usr/bin/fio
 #libaio most of the time..
 ioengine=libaio
 #ioengine=psync
+#ioengine=posixaio
 
 iodepth=8
 
 
+###don't change this unless you know what you are doing
+USABLE_CNODES=8
+CN_DIST_MODE=modulo #or random..
 
 #pick the ID of the vip pool you want to use..most of the time it will be '1'
 
@@ -71,7 +75,6 @@ if  [[ -f "/vast/vman/mgmt-vip" ]]; then
   if [[ ${NFS} == "rdma" ]] ; then
     echo "running on a vast node requires using tcp, doing that instead."
     NFS=tcp
-    echo $NFS
   fi
 
 fi
@@ -102,10 +105,11 @@ if [ "$numVIPS" -lt "$JOBS" ]; then
   exit 20
 fi
 
-
-
-
-
+#put the vips into an array.
+all_vips=()
+for i in $client_VIPs; do
+  all_vips+=(${i})
+done
 
 
 
@@ -115,11 +119,25 @@ fi
 if [ $IS_VAST == 1 ]; then
   #dima don't like this, but for now its fine.
   numCNodes=`grep 'cnodes:' /etc/clustershell/groups.d/local.cfg |awk -F ":" {'print $2'}|wc -w`
-  if [ "$numCNodes" -gt 4 ]; then
+  if [ "$numCNodes" -gt $USABLE_CNODES ]; then
     #check if we're on the VMS Cnode
     if [ $(docker ps -q --filter label=role=vms |wc -l) -eq 1 ]; then
       echo "not going to run on VMS node"
       exit
+    fi
+  fi
+
+  if [ "$CN_DIST_MODE" == "modulo" ]; then
+    #also, make sure the VIP pool is big enough to properly distribute. numCNodes, add JOBS, and make sure that is numVIPS + 1 or smaller.
+    #Basic methodology is that we want to shift the starting IP for each CNode, and have it mount $Numjobs (up to 12) VIPs.
+    # eg: CN1 mounts .1 -> 12 , CN2 mounts .2 -> .13 , CN3 mounts .3 -> .14 , and so on.
+    # have to make sure that we have enough VIPs for this.  For now, just exit if we don't and tell the user to make the VIP pool larger.
+    # maybe later we can be smarter.
+    #
+    vipTEST=$(($numVIPS + 1))
+    if [[ $vipTEST -lt $(($numCNodes + $JOBS)) ]]; then
+      echo "you need at least $((($numCNodes + $JOBS) - 1)) vips"
+      exit 20
     fi
   fi
   #next, avoid crossing ISLs since we are on cnodes.
@@ -156,20 +174,28 @@ fi
 
 
 
-#remake this into a proper array
-all_vips=()
-for i in $client_VIPs; do
-  all_vips+=(${i})
-done
+#build the list of vips to actually mount.
+#
+if [ $IS_VAST == 1 ] && [ "$CN_DIST_MODE" == "modulo" ];then
 
-# shuffle...but this may not behave like you want.
+  #figure out what node we are on.
+  export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
 
-#all_vips=( $(shuf -e "${all_vips[@]}") )
+  idx_start=$(( $NODENUM - 1))
+  idx_end=$((($idx_start + $JOBS) -1 ))
+  needed_vips=()
+  for ((idx=$idx_start; idx<=$idx_end; idx++)); do
+    needed_vips+=(${all_vips[$idx]})
+  done
 
-#but: if you are using read_bw_reuse , then you definitely want to shuffle.
-
-if [[ ${TEST} == "read_bw_reuse" ]] ; then
+else
+  #either we're not on a vast cnode, or you chose random distribution.
+  #Better logic could be had here, but for now just randomize the vip list, and iterate through them until numJobs is satisfied.
   all_vips=( $(shuf -e "${all_vips[@]}") )
+  needed_vips=()
+  for ((idx=0; idx<${JOBS} && idx+1<${#all_vips[@]}; ++idx)); do
+    needed_vips+=(${all_vips[$idx]})
+  done
 fi
 
 
@@ -180,12 +206,6 @@ sudo umount -lf ${MOUNT}/*
 export node=`hostname`
 
 
-#only use as many mounts as we have threads on this host..
-#
-needed_vips=()
-for ((idx=0; idx<${JOBS} && idx+1<${#all_vips[@]}; ++idx)); do
-  needed_vips+=(${all_vips[$idx]})
-done
 
 
 DIRS=()
@@ -194,11 +214,12 @@ MD_DIRS=()
 for i in ${needed_vips[@]}
         do sudo mkdir -p ${MOUNT}/${i}
         if [[ ${NFS} == "rdma" ]] ; then
-          sudo mount -vvv -t nfs -o proto=rdma,port=20049,vers=3 ${i}:/${NFSEXPORT} ${MOUNT}/${i}
+          sudo mount -vvv -t nfs -o proto=rdma,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
         else
-          sudo mount -vvv -t nfs -o tcp,rw,vers=3 ${i}:/${NFSEXPORT} ${MOUNT}/${i}
+          sudo mount -vvv -t nfs -o tcp,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
         fi
-        export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}/${i}
+        #export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}/${i}
+        export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
         DIRS+=${fio_dir}:
         sudo mkdir -p ${fio_dir}
         sudo chmod 777 ${fio_dir}
@@ -240,7 +261,77 @@ cleanup_only () {
   echo "I'm only cleaning up..."
 }
 
+####unused (appendix) functions.####
 
+unused_split_func () {
+
+  #if using split_vips, actually need more vips.
+  # basically, take the total number of VIPs, divide by 2 , and if that number is less than the number of jobs, then exit.
+
+  if [ $IS_VAST == 1 ] && [ $SPLIT_VIPS == 1 ];then
+      half_vips=$(( $numVIPS / 2 ))
+    if [ $JOBS -gt $half_vips ];then
+      echo "can't use SPLIT vips with this many jobs., disabling split mode and running regular. "
+      SPLIT_VIPS=0
+    fi
+  fi
+
+
+
+
+  #
+  #experimental.  Basically, if enabled, you must already have 2 VIPs per 'usable' cnode in the pool. EG:
+  # if you subtract VMS on a 3x2 , you wind up with 11 'usable' cnodes, so you need 22 vips.
+  # the logic below allows 'even' numbered nodes to use 'even' numbered VIPs, odd nodes used odd vips. This is
+  # only applicable when running on CNodes.
+
+
+  if [ $SPLIT_VIPS == 1 ]; then
+    #also need to exit if not enough vips for threads.
+
+    if [ $IS_VAST == 1 ]; then
+      all_vips=()
+      #find out if i'm on an even number or odd number cnode.
+      export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
+      if (( $NODENUM % 2 )); then
+        echo "$NODENUM is even"
+        for vip in $client_VIPs; do
+          #vip last_octet
+          vip_last_octet=`echo $vip|awk -F "." {'print $4'}`
+          if (( $vip_last_octet % 2)); then
+            all_vips+=(${vip})
+          fi
+        done
+      else
+        echo "$NODENUM is odd"
+        for vip in $client_VIPs; do
+          vip_last_octet=`echo $vip|awk -F "." {'print $4'}`
+          if (( $vip_last_octet % 2)); then
+            #do nothing.
+            echo "not using this vip"
+          else
+            all_vips+=(${vip})
+          fi
+        done
+      fi
+    else
+      #not a vast system.
+      all_vips=()
+      for i in $client_VIPs; do
+        all_vips+=(${i})
+      done
+    fi
+  else
+    #split vips wasn't used.
+    all_vips=()
+    for i in $client_VIPs; do
+      all_vips+=(${i})
+    done
+  fi
+
+}
+
+####end all functions.#####
 
 
 if [[ ${TEST} == "read_bw" ]] ; then
