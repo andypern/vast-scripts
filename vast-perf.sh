@@ -33,7 +33,7 @@
 # 1.  put this script on client-1 (or Cnode-1)
 # 2.  Run it like this 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcp'  <--- this will ONLY run on client, and will read_bw test for 120 seconds, with 8 numjobs.
 # 3.  Once you verify it works, copy to all clients: `clush -g clients -c /home/vastdata/vast-perf.sh`.  substitute the word 'cnodes' for clients in the clush example if you are running on a cnode.
-# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 read_bw 120 8 1 tcp'`
+# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcp`
 
 
 
