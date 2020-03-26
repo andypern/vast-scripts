@@ -4,7 +4,7 @@
 
 ###When running on a Vast-Cnode
 ## if you use 'modulo' for CN_DIST_MODE (the default) , it will require a larger VIP pool, specifically ()$numCNodes + $JOBS) - 1
-# If running on a cluster with more thatn 8 CNodes, the script will not execute on the node holding VMS (this is to prevent OOM issues)
+# If running on a cluster with more than 8 CNodes, the script will not execute on the node holding VMS (this is to prevent OOM issues)
 # If you notice issues on 8CN or smaller clusters where VMS crashes, then adjust the 'USABLE_CNODES' variable to a smaller number.
 # If you make changes to any variables in the script, make sure to copy the file to all cnodes before executing.
 # If you choose 'RDMA', the script will automatically change to TCP, because Vast-CNodes do not have RDMA-client packages.
@@ -33,7 +33,7 @@
 # 1.  put this script on client-1 (or Cnode-1)
 # 2.  Run it like this 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcp'  <--- this will ONLY run on client, and will read_bw test for 120 seconds, with 8 numjobs.
 # 3.  Once you verify it works, copy to all clients: `clush -g clients -c /home/vastdata/vast-perf.sh`.  substitute the word 'cnodes' for clients in the clush example if you are running on a cnode.
-# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcp`
+# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcpok pu`
 
 
 
@@ -70,6 +70,7 @@ iodepth=8 #
 ###don't change this unless you know what you are doing
 USABLE_CNODES=8
 CN_DIST_MODE=modulo #or 'random' .  Only applies to running on a vast-cnode.
+
 #
 #
 ###end vars.###
@@ -215,30 +216,34 @@ fi
 #force unmount anything that might have been mounted last time this was run.
 sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
 
-export node=`hostname`
 
 
 
 
-DIRS=()
-MD_DIRS=()
-
-for i in ${needed_vips[@]}
-        do sudo mkdir -p ${MOUNT}/${i}
-        if [[ ${NFS} == "rdma" ]] ; then
-          sudo mount -v -t nfs -o proto=rdma,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
-        else
-          sudo mount -v -t nfs -o tcp,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
-        fi
-        export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
-        DIRS+=${fio_dir}:
-        sudo mkdir -p ${fio_dir}
-        sudo chmod 777 ${fio_dir}
-
-done
+mount_func () {
+  export node=`hostname`
 
 
-echo ${DIRS}
+  DIRS=()
+  MD_DIRS=()
+
+  for i in ${needed_vips[@]}
+          do sudo mkdir -p ${MOUNT}/${i}
+          if [[ ${NFS} == "rdma" ]] ; then
+            sudo mount -v -t nfs -o proto=rdma,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+          else
+            sudo mount -v -t nfs -o tcp,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+          fi
+          export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
+          DIRS+=${fio_dir}:
+          sudo mkdir -p ${fio_dir}
+          sudo chmod 777 ${fio_dir}
+  done
+
+  echo ${DIRS}
+
+}
+
 
 write_bw_test () {
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
@@ -267,10 +272,30 @@ read_bw_reuse_test () {
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
 }
 
-cleanup_only () {
+
+cleanup() {
   #basically, just skip doing any actual testing, and make sure that routes and mounts are cleaned up.
   echo "I'm only cleaning up..."
   pkill fio
+  sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
+  echo "unmounting all dirs"
+  sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
+
+
+  if [ $IS_VAST == 1 ]; then
+    if [[ $iface_count -eq 2 ]] ; then
+      for iface in $EXT_IFACES
+        do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | grep vip|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+        for IP in ${IPS_TO_ROUTE}
+        # a little heavy handed, but its OK.
+          do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
+        done
+      done
+    else
+      echo "only one external iface, skipping route destruction"
+    fi
+  fi
+
 }
 
 ####unused (appendix) functions.####
@@ -280,17 +305,22 @@ cleanup_only () {
 
 
 if [[ ${TEST} == "read_bw" ]] ; then
+  mount_func
   read_bw_test
 elif [[ ${TEST} == "write_bw" ]] ; then
+  mount_func
   write_bw_test
 elif [[ ${TEST} == "write_iops" ]] ; then
+  mount_func
   write_iops_test
 elif [[ ${TEST} == "read_iops" ]] ; then
+  mount_func
   read_iops_test
 elif [[ ${TEST} == "read_bw_reuse" ]] ; then
+  mount_func
   read_bw_reuse_test
 elif [[ ${TEST} == "cleanup" ]] ; then
-  cleanup_only
+  cleanup
 else
   echo "you didn't specify a valid test. unmounting and exiting"
 fi
@@ -305,23 +335,4 @@ if [[ $DELETE_ALL -eq 1 ]] ; then
   done
 else
   echo "leaving files in place. you may want to clean up before you leave.."
-fi
-
-
-echo "unmounting all dirs"
-sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
-
-
-if [ $IS_VAST == 1 ]; then
-  if [[ $iface_count -eq 2 ]] ; then
-    for iface in $EXT_IFACES
-      do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | grep vip|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
-      for IP in ${IPS_TO_ROUTE}
-      # a little heavy handed, but its OK.
-        do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
-      done
-    done
-  else
-    echo "only one external iface, skipping route destruction"
-  fi
 fi
