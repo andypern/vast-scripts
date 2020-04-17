@@ -2,78 +2,165 @@
 # This script can be run either on a Vast-CNode, or another linux host.
 
 
-###When running on a Vast-Cnode
-## if you use 'modulo' for CN_DIST_MODE (the default) , it will require a larger VIP pool, specifically ()$numCNodes + $JOBS) - 1
+#New stuff
+# In order to simplify usage...we no longer require any args. However:
+#  * if you are _not_ running on a CNode, you must specify --vms=$vip
+
+
+####Background/details##
+##If you are running on a Vast-Cnode
+
+## if you use 'modulo' for CN_DIST_MODE (the default) , it will require a larger VIP pool, specifically ()$numCNodes + $JOBS) - 1.  You can also just choose '--distmode=random'
 # If running on a cluster with more than 8 CNodes, the script will not execute on the node holding VMS (this is to prevent OOM issues)
-# If you notice issues on 8CN or smaller clusters where VMS crashes, then adjust the 'USABLE_CNODES' variable to a smaller number.
-# If you make changes to any variables in the script, make sure to copy the file to all cnodes before executing.
+# If you notice issues on 8CN or smaller clusters where VMS crashes, set --usevms=false
 # If you choose 'RDMA', the script will automatically change to TCP, because Vast-CNodes do not have RDMA-client packages.
 # This script will temporarily adjust CNode <-> CNode routing tables to ensure that traffic does not cross the ISL's.
-######
+####
 
-###When running on a non-vast client
+##When running on a non-vast client
 ## it requires that FIO 3.1 or higher is available on the host (by default it is on vast-cnodes)
-# If FIO is in a different location than /usr/bin/fio : you must update the FIO_BIN variable before executing.
+# If FIO is in a different location than /usr/bin/fio : specify --binary=/path/to/fio
 # you must make sure that the number of VIPs in the VIP-pool you use is at least equal to the number of jobs you are using.
-# If you choose 'rdma' for the final argument: make sure that you have already setup and verified that you can mount NFS using RDMA.
+# If you choose '--proto=rdma' : make sure that you have already setup and verified that you can mount NFS using RDMA.
 #
-#####
+
 
 ###Behavior, 'best practices'
 # You will want to run the write_bw test for at least 5 minutes (300 seconds) to blow through Optane buffers.
 # The first time you run a read test, it may want to create some files as it reads, this will slow down the test, just re-run it until it stops trying to create files.
 # When running on a Vast-cnode: start with JOBS=12 before testing with smaller values.  That way the files will get pre-created for subsequent runs.
 # Refrain from pressing 'crtl-c' when you are performing write tests, or if you are performing read tests and you see that FIO is 'laying out .. files'.  Doing so may result in unkillable FIO processes
-# If you press crtl-c during any test, then immediately re-run the script with the 'cleanup' job : 'vast-perf.sh 10.100.201.201 cleanup 120 8 1 tcp'.  This will ensure that mounts/etc are cleaned up.
-#all arguments are positional, and all are required.  There is currently minimal error checking done, __
-# and incorrect usage may yield unexpected results.  Read through the 'positional args' below to make sure you understand.
+# If you press crtl-c during any test, then immediately re-run the script with the 'cleanup' job with --test=cleanup .This will ensure that mounts/etc are cleaned up.
+# Minimal error checking is done.  incorrect usage may yield unexpected results.  Read through the 'Variables' section below and make sure you understand.
+#####
 
-##run like this:
+
+###How to Run###
+
+
+##Running on a CNode
+# 1.  put this script on Cnode-1
+# 2.  'bash /home/vastdata/vast-perf.sh'  <--only runs on one host it will run with config defaults (see below), and discover VMS ip.  
+# 3.  Once you verify it works, copy to all cnodes: `clush -g cnodes -c /home/vastdata/vast-perf.sh`. 
+# 4.  Run on all Cnodes like this `clush -g cnodes "bash /home/vastdata/vast-perf.sh"`
+# 5.  Specify different tests with the '--test=' flag (write_bw , read_iops, write_iops)
+# 6.  Run like this to clean everything up: `clush -g cnodes "bash /home/vastdata/vast-perf.sh --test=cleanup --delete=1"`
+####
+
+## Running on an external client ##
 # you don't _need_ clustershell/clush , but it makes it easier to run this on multiple hosts.
-# 1.  put this script on client-1 (or Cnode-1)
-# 2.  Run it like this 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcp'  <--- this will ONLY run on client, and will read_bw test for 120 seconds, with 8 numjobs.
-# 3.  Once you verify it works, copy to all clients: `clush -g clients -c /home/vastdata/vast-perf.sh`.  substitute the word 'cnodes' for clients in the clush example if you are running on a cnode.
-# 4.  Run on all nodes like this `clush -g clients 'bash /home/vastdata/vast-perf.sh 10.100.201.201 / read_bw 120 8 1 tcpok pu`
+
+# 1.  put this script on client-1 (whatever that is)
+# 2.  'bash vast-perf.sh --vms=x.x.x.x'  <--only runs on one host.
+# 3.  Once you verify it works, copy to all hosts (using whatever mechanism you have)
+# 4.  run on all hosts..here's a clush example, but pdsh/etc can work: clush -g clients "bash /home/vastdata/vast-perf.sh --vms=x.x.x.x"
+# 5.  Specify different tests with the '--test=' flag (write_bw , read_iops, write_iops)
+# 6.  Run like this to clean everything up: clush -g clients "bash /home/vastdata/vast-perf.sh --vms=x.x.x.x --test=cleanup --delete=1"
 
 
 
-
-###positional $ARGS:###
+## Variables.  
+# Below are defaults (which will get overridden by user specified ARGS).  Don't set these variables directly, use the '--' args.
 #
 #
-mVIP=$1  # the VMS-VIP of the vast cluster you are testing against.
-NFSEXPORT=$2 # the NFS export to use.  On a brand new cluster use '/' (no quotes)
-TEST=$3 # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops' , 'cleanup'
-RUNTIME=$4 # runtime in seconds of the test.
-JOBS=$5 # how many threads per host. This will also result in N mountpoints per host.
-POOL=$6 # what pool to run on, typically this will be '1', but check!
-NFS=$7 #rdma or tcp.  When in doubt, use tcp
+#
+mVIP="empty"  # the VMS-VIP of the vast cluster you are testing against. If you run on CNodes, don't worry about setting.  If you run on an external client, you must specify the VMS-VIP with --vms=ip
 
+NFSEXPORT="/" # the NFS export to use.  On a brand new cluster use '/' (no quotes)
+TEST="read_bw" # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops' , 'cleanup'
+RUNTIME=120 # runtime in seconds of the test.
+JOBS=8 # how many threads per host. This will also result in N mountpoints per host.
+POOL=1 # what pool to run on, typically this will be '1', but check!
+PROTO="tcp" #rdma or tcp.  When in doubt, use tcp
 REMOTE_PATH="fio" # change this to whatever you want it to be. This is the subdir underneath the export which will be created.
-
-
-
-#set this to 1 if you want to delete all FIO generated files that this script may have created previously.
-DELETE_ALL=0
-
+FIO_BIN=/usr/bin/fio #location where fio binary exists.
 MOUNT=/mnt/fiodemo #where the mountpoints will get created on the host/cnode you are running this on.
-
-FIO_BIN=/usr/bin/fio
-
-#use libaio most of the time.
-ioengine=libaio #other options: posixaio
-
-#For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
-iodepth=8 #
-
-
-###don't change this unless you know what you are doing
-USABLE_CNODES=8
+DELETE_ALL=0 #set this to 1 if you want to delete all FIO generated files that this script may have created previously.
+ioengine=libaio #use libaio most of the time. other options: posixaio
+iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
+USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
 CN_DIST_MODE=modulo #or 'random' .  Only applies to running on a vast-cnode.
+
+
+###Following are hardcoded and not change-able via args/flags.
+
+USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
 
 #
 #
 ###end vars.###
+
+
+
+
+##argparsing..
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --vms=*)
+      mVIP="${1#*=}"
+      ;;
+    --export=*)
+      NFSEXPORT="${1#*=}"
+      ;;
+    --test=*)
+    TEST="${1#*=}"
+    ;;
+    --runtime=*)
+      RUNTIME="${1#*=}"
+      ;;
+    --proto=*)
+    PROTO="${1#*=}"
+    ;;
+    --jobs=*)
+    JOBS="${1#*=}"
+    ;;
+    --pool=*)
+    POOL="${1#*=}"
+    ;;
+    --path=*)
+    REMOTE_PATH="${1#*=}"
+    ;;
+    --binary=*)
+    FIO_BIN="${1#*=}"
+    ;;
+    --mountpoint=*)
+    MOUNT="${1#*=}"
+    ;;
+    --delete=*)
+    DELETE_ALL="${1#*=}"
+    ;;
+    --ioengine=*)
+    ioengine="${1#*=}"
+    ;;
+    --iodepth=*)
+    iodepth="${1#*=}"
+    ;;
+    --usevms=*)
+    USE_VMS="${1#*=}"
+    ;;
+    --distmode=*)
+    CN_DIST_MODE="${1#*=}"
+    ;;
+    --help=*)
+    HELPME="true"
+    ;;
+    *)
+      printf "***************************\n"
+      printf "* Usage: vast-perf.sh [ --vms=x.x.x.x ] \n"
+      printf "* [ --export=/ ] [ --test=read_bw ] [ --runtime=120 ]\n"
+      printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
+      printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
+      printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
+      printf "* [--distmode=modulo ] [--help] \n"
+      printf "***************************\n"
+      exit 1
+      exit 1
+  esac
+  shift
+done
+
+## end argparsing.
 
 
 
@@ -86,12 +173,17 @@ IS_VAST=0
 
 if  [[ -f "/vast/vman/mgmt-vip" ]]; then
   IS_VAST=1
-  echo 'running on a Vast node.'
-  if [[ ${NFS} == "rdma" ]] ; then
-    echo "running on a vast node requires using tcp, doing that instead."
-    NFS=tcp
+  mVIP=`cat /vast/vman/mgmt-vip`
+  echo "running on a Vast node. setting VMSIP to ${mVIP}"
+  if [[ ${PROTO} == "rdma" ]] ; then
+    echo "Using TCP for mounts."
+    PROTO=tcp
   fi
-
+else # if we are running on an external client.
+  if [[ ${mVIP} == "empty" ]] ; then
+    echo "You must specify a VMS ip via --vms=x.x.x.x"
+    exit 20
+  fi
 fi
 
 
@@ -120,6 +212,9 @@ if [ "$numVIPS" -lt "$JOBS" ]; then
   exit 20
 fi
 
+
+##print out all the stuff we are going to do before the test executes.
+
 #put the vips into an array.
 all_vips=()
 for i in $client_VIPs; do
@@ -134,7 +229,7 @@ done
 if [ $IS_VAST == 1 ]; then
   #dima don't like this, but for now its fine.
   numCNodes=`grep 'cnodes:' /etc/clustershell/groups.d/local.cfg |awk -F ":" {'print $2'}|wc -w`
-  if [ "$numCNodes" -gt $USABLE_CNODES ]; then
+  if [ "$numCNodes" -gt $USABLE_CNODES ] || [ "$USE_VMS" == "false" ]; then
     #check if we're on the VMS Cnode
     if [ $(docker ps -q --filter label=role=vms |wc -l) -eq 1 ]; then
       echo "not going to run on VMS node"
@@ -159,7 +254,7 @@ if [ $IS_VAST == 1 ]; then
 
   #first, figure out what ifaces we need to use.
 
-  export EXT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep external|awk -F "=" {'print $2'}| sed -E 's/,/ /')
+  export EXT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep external_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
   # we only care if there are more than one iface.
   export iface_count=`echo $EXT_IFACES | wc -w`
@@ -168,7 +263,7 @@ if [ $IS_VAST == 1 ]; then
   if [[ $iface_count -eq 2 ]] ; then
     # sometimes the route is OK, sometimes its not,  check them all and only change if they are 'wrong'
     for iface in $EXT_IFACES
-      do IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | grep vip|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+      do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
       #now check what the route looks like on this node for each ip.
       for IP in ${IPS_TO_ROUTE}
         do current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
@@ -229,7 +324,7 @@ mount_func () {
 
   for i in ${needed_vips[@]}
           do sudo mkdir -p ${MOUNT}/${i}
-          if [[ ${NFS} == "rdma" ]] ; then
+          if [[ ${PROTO} == "rdma" ]] ; then
             sudo mount -v -t nfs -o proto=rdma,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
           else
             sudo mount -v -t nfs -o tcp,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
@@ -252,7 +347,7 @@ write_bw_test () {
 
 
 read_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=100 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 
@@ -262,7 +357,7 @@ write_iops_test () {
 }
 
 read_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=100 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 #only use if you know what you are doing.
@@ -285,7 +380,7 @@ cleanup() {
   if [ $IS_VAST == 1 ]; then
     if [[ $iface_count -eq 2 ]] ; then
       for iface in $EXT_IFACES
-        do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | grep vip|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+        do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
         for IP in ${IPS_TO_ROUTE}
         # a little heavy handed, but its OK.
           do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
@@ -298,7 +393,6 @@ cleanup() {
 
 }
 
-####unused (appendix) functions.####
 
 
 ####end all functions.#####
