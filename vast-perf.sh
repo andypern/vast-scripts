@@ -325,9 +325,9 @@ mount_func () {
   for i in ${needed_vips[@]}
           do sudo mkdir -p ${MOUNT}/${i}
           if [[ ${PROTO} == "rdma" ]] ; then
-            sudo mount -v -t nfs -o proto=rdma,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+            sudo mount -v -t nfs -o proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
           else
-            sudo mount -v -t nfs -o tcp,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+            sudo mount -v -t nfs -o tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
           fi
           export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
           DIRS+=${fio_dir}:
