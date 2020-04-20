@@ -80,14 +80,12 @@ ioengine=libaio #use libaio most of the time. other options: posixaio
 iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
 CN_DIST_MODE=modulo #or 'random' .  Only applies to running on a vast-cnode.
+ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 
 
 ###Following are hardcoded and not change-able via args/flags.
 
 USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
-
-#
-#
 ###end vars.###
 
 
@@ -117,6 +115,9 @@ while [ $# -gt 0 ]; do
     ;;
     --pool=*)
     POOL="${1#*=}"
+    ;;
+    --alt-pool=*)
+    ALT_POOL="${1#*=}"
     ;;
     --path=*)
     REMOTE_PATH="${1#*=}"
@@ -188,6 +189,7 @@ fi
 
 
 
+
 if [[ ${TEST} == "read_bw_reuse" ]] ; then
   #this test is really only valid if you are using RDMA, otherwise you will bottleneck on a single mount per client.
   if [[ ${IS_VAST} == 1 ]] ; then
@@ -197,14 +199,35 @@ if [[ ${TEST} == "read_bw_reuse" ]] ; then
 fi
 
 
+# 
+#
+#
 
-#VIPs for client access
-client_VIPs="$(/usr/bin/curl -s -u admin:123456 -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${POOL}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
-echo $client_VIPs
-if [ "x$client_VIPs" == 'x' ] ; then
-    echo 'Failed to retrieve cluster virtual IPs for client access, check VMSip or pool-id'
-    exit 20
+pools=()
+
+pools+=(${POOL})
+
+
+
+
+if [ $IS_VAST == 0 ] && [ "$ALT_POOL" != "empty" ];then
+  pools+=" ${ALT_POOL}"
 fi
+
+client_VIPs=""
+
+for pool in $pools; do
+  #VIPs for client access
+  client_VIPs+="$(/usr/bin/curl -s -u admin:123456 -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
+  echo $client_VIPs
+  if [ "x$client_VIPs" == 'x' ] ; then
+      echo 'Failed to retrieve cluster virtual IPs for client access, check VMSip or pool-id'
+      exit 20
+  fi
+done
+
+
+
 
 numVIPS=`echo $client_VIPs | wc -w`
 if [ "$numVIPS" -lt "$JOBS" ]; then
@@ -212,8 +235,6 @@ if [ "$numVIPS" -lt "$JOBS" ]; then
   exit 20
 fi
 
-
-##print out all the stuff we are going to do before the test executes.
 
 #put the vips into an array.
 all_vips=()
@@ -372,11 +393,19 @@ cleanup() {
   #basically, just skip doing any actual testing, and make sure that routes and mounts are cleaned up.
   echo "I'm only cleaning up..."
   pkill fio
-  sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
-  echo "unmounting all dirs"
-  sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
+  # this will clean up anything in dirs
+  if [[ $DELETE_ALL -eq 1 ]] ; then
+    echo "deleting all created files"
+    sudo rm -rvf ${MOUNT}/${needed_vips[0]}/${REMOTE_PATH}/${node}
+    sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
+    sudo rm -rf ${MOUNT}
+  else
+    echo "leaving files in place. you may want to clean up before you leave.."
+    echo "unmounting all dirs"
+    sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
+  fi
 
-
+  
   if [ $IS_VAST == 1 ]; then
     if [[ $iface_count -eq 2 ]] ; then
       for iface in $EXT_IFACES
@@ -401,32 +430,27 @@ cleanup() {
 if [[ ${TEST} == "read_bw" ]] ; then
   mount_func
   read_bw_test
+  cleanup
 elif [[ ${TEST} == "write_bw" ]] ; then
   mount_func
   write_bw_test
+  cleanup
 elif [[ ${TEST} == "write_iops" ]] ; then
   mount_func
   write_iops_test
+  cleanup
 elif [[ ${TEST} == "read_iops" ]] ; then
   mount_func
   read_iops_test
+  cleanup
 elif [[ ${TEST} == "read_bw_reuse" ]] ; then
   mount_func
   read_bw_reuse_test
+  cleanup
 elif [[ ${TEST} == "cleanup" ]] ; then
+  mount_func
   cleanup
 else
   echo "you didn't specify a valid test. unmounting and exiting"
 fi
 
-
-
-# this will clean up anything in dirs
-if [[ $DELETE_ALL -eq 1 ]] ; then
-  echo "deleting all created files"
-  for dir in ${DIRS}
-    do rm -f ${dir}/*
-  done
-else
-  echo "leaving files in place. you may want to clean up before you leave.."
-fi
