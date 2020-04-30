@@ -79,7 +79,7 @@ DELETE_ALL=0 #set this to 1 if you want to delete all FIO generated files that t
 ioengine=libaio #use libaio most of the time. other options: posixaio
 iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
-CN_DIST_MODE=modulo #or 'random' .  Only applies to running on a vast-cnode.
+CN_DIST_MODE=random #or 'modulo' (experimental) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 
 
@@ -92,6 +92,20 @@ USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usev
 
 
 ##argparsing..
+
+### try this sometime...
+# USAGE="$0 -n <qty> -d <path> -h <list,of,hosts> "
+# while getopts n:d:h: c
+#       do
+#           case $c in
+#               n)      shift; QTY=$1 ;;
+#               d)      shift; THEPATH="$1" ;;
+#               h)      shift; THEHOSTS="$1" ;;
+#              \?)      echo $USAGE
+#                       exit 2;;
+#           esac
+#       done
+
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -309,7 +323,7 @@ if [ $IS_VAST == 1 ] && [ "$CN_DIST_MODE" == "modulo" ];then
 
   #figure out what node we are on.
   export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
-
+  echo "$NODENUM here"
   idx_start=$(( $NODENUM - 1))
   idx_end=$((($idx_start + $JOBS) -1 ))
   needed_vips=()
@@ -339,16 +353,15 @@ sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
 mount_func () {
   export node=`hostname`
 
-
   DIRS=()
   MD_DIRS=()
 
   for i in ${needed_vips[@]}
           do sudo mkdir -p ${MOUNT}/${i}
           if [[ ${PROTO} == "rdma" ]] ; then
-            sudo mount -v -t nfs -o proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+            sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
           else
-            sudo mount -v -t nfs -o tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+            sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
           fi
           export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
           DIRS+=${fio_dir}:
