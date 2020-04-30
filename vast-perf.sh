@@ -79,7 +79,7 @@ DELETE_ALL=0 #set this to 1 if you want to delete all FIO generated files that t
 ioengine=libaio #use libaio most of the time. other options: posixaio
 iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
-CN_DIST_MODE=random #or 'modulo' (experimental) .  Only applies to running on a vast-cnode.
+CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 
 
