@@ -70,6 +70,7 @@ NFSEXPORT="/" # the NFS export to use.  On a brand new cluster use '/' (no quote
 TEST="read_bw" # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops' , 'cleanup'
 RUNTIME=120 # runtime in seconds of the test.
 JOBS=8 # how many threads per host. This will also result in N mountpoints per host.
+SIZE="20g" # size of each file, one per thread.
 POOL=1 # what pool to run on, typically this will be '1', but check!
 PROTO="tcp" #rdma or tcp.  When in doubt, use tcp
 REMOTE_PATH="fio" # change this to whatever you want it to be. This is the subdir underneath the export which will be created.
@@ -126,6 +127,9 @@ while [ $# -gt 0 ]; do
     ;;
     --jobs=*)
     JOBS="${1#*=}"
+    ;;
+    --size=*)
+    SIZE="${1#*=}"
     ;;
     --pool=*)
     POOL="${1#*=}"
@@ -375,23 +379,23 @@ mount_func () {
 
 
 write_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 
 }
 
 
 read_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=1mb --direct=1 --size=20g --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=1mb --direct=1 --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 
 write_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=1 --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 
 }
 
 read_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=4kb --direct=1 --size=20g --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=4kb --direct=1 --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 #only use if you know what you are doing.
