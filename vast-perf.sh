@@ -76,18 +76,24 @@ PROTO="tcp" #rdma or tcp.  When in doubt, use tcp
 REMOTE_PATH="fio" # change this to whatever you want it to be. This is the subdir underneath the export which will be created.
 FIO_BIN=/usr/bin/fio #location where fio binary exists.
 MOUNT=/mnt/fiodemo #where the mountpoints will get created on the host/cnode you are running this on.
-DELETE_ALL=0 #set this to 1 if you want to delete all FIO generated files that this script may have created previously.
+DELETE_ALL=0 #if you use --delete=1 , it will clean up all files & mountpoints.
 ioengine=libaio #use libaio most of the time. other options: posixaio
 iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
-
+CN_AVOID_ISL=1 # set to 0 if you don't care..
+EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
+DIRECT=1 # o_direct or not..
 
 ###Following are hardcoded and not change-able via args/flags.
 
 USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
+NOT_CNODE=0 # this only applies in the lab. leave at 0 normally
+CLIENT_ISL_AVOID=0 # experimental.
 ###end vars.###
+
+
 
 
 
@@ -155,11 +161,17 @@ while [ $# -gt 0 ]; do
     --iodepth=*)
     iodepth="${1#*=}"
     ;;
+    --direct=*)
+    DIRECT="${1#*=}"
+    ;;
     --usevms=*)
     USE_VMS="${1#*=}"
     ;;
     --distmode=*)
     CN_DIST_MODE="${1#*=}"
+    ;;
+    --avoid-isl=*)
+    CN_AVOID_ISL="${1#*=}"
     ;;
     --help=*)
     HELPME="true"
@@ -171,7 +183,7 @@ while [ $# -gt 0 ]; do
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
       printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
-      printf "* [--distmode=modulo ] [--help] \n"
+      printf "* [--distmode=modulo ] [--avoid-isl ] [--help] \n"
       printf "***************************\n"
       exit 1
       exit 1
@@ -190,7 +202,7 @@ done
 #
 IS_VAST=0
 
-if  [[ -f "/vast/vman/mgmt-vip" ]]; then
+if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
   IS_VAST=1
   mVIP=`cat /vast/vman/mgmt-vip`
   echo "running on a Vast node. setting VMSIP to ${mVIP}"
@@ -299,7 +311,8 @@ if [ $IS_VAST == 1 ]; then
   export iface_count=`echo $EXT_IFACES | wc -w`
   echo "interface count is $iface_count"
 
-  if [[ $iface_count -eq 2 ]] ; then
+
+  if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ] ; then
     # sometimes the route is OK, sometimes its not,  check them all and only change if they are 'wrong'
     for iface in $EXT_IFACES
       do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
@@ -315,7 +328,7 @@ if [ $IS_VAST == 1 ]; then
       done
     done
   else
-    echo "only one external iface, skipping route setup"
+    echo "skipping route setup"
   fi
 fi
 ####End CNode specific stuff.###
@@ -344,6 +357,53 @@ else
     needed_vips+=(${all_vips[$idx]})
   done
 fi
+
+
+avoid_isl_func () {
+  # experimental.  this only applies if you are not running on cnodes, since we already have a hack for that.
+  # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
+  if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ] ; then
+    #basically, we need to find out if the CNode iface matches the client.
+    # for that..ssh key must work to the VMS-ip.
+    # what we do is ssh to the VMS ip, do a 'clush' looking for the various ip's, and make a list.
+    # Then, we have to look at the client side IPs, and determine if the iface which is on the same 'subnet' will 
+    # be able to talk directly to the iface on the CNode.  This assumes that the clients have ib0 on the same switch
+    # that the cnode has ib0 on.
+    CLIENT_IFACES="ib0 ib1"
+    for iface in $CLIENT_IFACES
+      do export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
+      #now check what the route looks like on this node for each ip.
+      for IP in ${IPS}
+        do current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
+        if [[ ${current_route} == $iface ]] ; then
+          echo "route is OK for $IP -> $iface , skipping"
+        else
+          echo "temporarily changing route for $IP -> $iface"
+          sudo /sbin/ip route add ${IP}/32 dev ${iface}
+        fi
+      done
+    done
+
+  fi
+}
+
+remove_isl_func() {
+    # experimental.  this only applies if you are not running on cnodes, since we already have a hack for that.
+  # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
+  if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ] ; then
+    CLIENT_IFACES="ib0 ib1"
+    for iface in $CLIENT_IFACES
+      do export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
+      #now check what the route looks like on this node for each ip.
+      for IP in ${IPS}
+      #this just deletes all /32 routes that we might have..
+        do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
+      done
+    done
+
+  fi
+
+}
 
 
 
@@ -379,30 +439,30 @@ mount_func () {
 
 
 write_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 
 }
 
 
 read_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=1mb --direct=1 --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randread --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME} $EXTRA_FIO_ARGS
 }
 
 
 write_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=1 --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 
 }
 
 read_iops_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=4kb --direct=1 --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --fallocate=none --iodepth=${iodepth} --rw=randread --bs=4kb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 }
 
 #only use if you know what you are doing.
 read_bw_reuse_test () {
   rando_dir=${MOUNT}/${all_vips[0]}/${REMOTE_PATH}
   echo ${rando_dir}
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=1 --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT}ß --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
 }
 
 
@@ -422,6 +482,7 @@ cleanup() {
     sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
   fi
 
+
   
   if [ $IS_VAST == 1 ]; then
     if [[ $iface_count -eq 2 ]] ; then
@@ -436,9 +497,11 @@ cleanup() {
       echo "only one external iface, skipping route destruction"
     fi
   fi
+  remove_isl_func
 
 }
 
+avoid_isl_func
 
 
 ####end all functions.#####
