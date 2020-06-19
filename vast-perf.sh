@@ -91,6 +91,7 @@ DIRECT=1 # o_direct or not..
 USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
 NOT_CNODE=0 # this only applies in the lab. leave at 0 normally
 CLIENT_ISL_AVOID=0 # experimental.
+LOOPBACK=0 # also experimental.
 ###end vars.###
 
 
@@ -173,6 +174,9 @@ while [ $# -gt 0 ]; do
     --avoid-isl=*)
     CN_AVOID_ISL="${1#*=}"
     ;;
+    --loopback=*)
+    LOOPBACK="${1#*=}"
+    ;;
     --help=*)
     HELPME="true"
     ;;
@@ -183,7 +187,7 @@ while [ $# -gt 0 ]; do
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
       printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
-      printf "* [--distmode=modulo ] [--avoid-isl ] [--help] \n"
+      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--help] \n"
       printf "***************************\n"
       exit 1
       exit 1
@@ -230,8 +234,6 @@ fi
 
 
 # 
-#
-#
 
 pools=()
 
@@ -311,8 +313,9 @@ if [ $IS_VAST == 1 ]; then
   export iface_count=`echo $EXT_IFACES | wc -w`
   echo "interface count is $iface_count"
 
+# skip if set to loopback, since we won't be mounting across the wire anyways.
 
-  if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ] ; then
+  if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ] && [ $LOOPBACK == 0 ] ; then 
     # sometimes the route is OK, sometimes its not,  check them all and only change if they are 'wrong'
     for iface in $EXT_IFACES
       do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
@@ -351,16 +354,30 @@ if [ $IS_VAST == 1 ] && [ "$CN_DIST_MODE" == "modulo" ];then
 else
   #either we're not on a vast cnode, or you chose random distribution.
   #Better logic could be had here, but for now just randomize the vip list, and iterate through them until numJobs is satisfied.
+
+  if [ $LOOPBACK == 1 ]; then
+    # experimental: only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
+    # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
+    all_vips=()
+    for iface in $EXT_IFACES; do
+      export local_vips=$(/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+      for local_vip in ${local_vips}; do
+        all_vips+=(${local_vip})
+      done
+    done
+  fi
+  # regardless of how we got here, shuffle the vips and only use as  many as we need to satisfy the job count, if we have enough.
   all_vips=( $(shuf -e "${all_vips[@]}") )
   needed_vips=()
   for ((idx=0; idx<${JOBS} && idx+1<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
   done
+
 fi
 
 
 avoid_isl_func () {
-  # experimental.  this only applies if you are not running on cnodes, since we already have a hack for that.
+  # experimental.  this only applies if you are NOT running on cnodes, since we already have a hack for that.
   # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
   if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ] ; then
     #basically, we need to find out if the CNode iface matches the client.
@@ -388,7 +405,7 @@ avoid_isl_func () {
 }
 
 remove_isl_func() {
-    # experimental.  this only applies if you are not running on cnodes, since we already have a hack for that.
+    # experimental.  this only applies if you are NOT running on cnodes, since we already have a hack for that.
   # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
   if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ] ; then
     CLIENT_IFACES="ib0 ib1"
