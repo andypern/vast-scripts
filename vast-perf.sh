@@ -85,6 +85,7 @@ ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 CN_AVOID_ISL=1 # set to 0 if you don't care..
 EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
+ADMINPASSWORD=123456
 
 ###Following are hardcoded and not change-able via args/flags.
 
@@ -177,6 +178,9 @@ while [ $# -gt 0 ]; do
     --loopback=*)
     LOOPBACK="${1#*=}"
     ;;
+    --password=*)
+    ADMINPASSWORD="${1#*=}"
+    ;;
     --help=*)
     HELPME="true"
     ;;
@@ -187,7 +191,7 @@ while [ $# -gt 0 ]; do
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
       printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
-      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--help] \n"
+      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--password=123456][--help] \n"
       printf "***************************\n"
       exit 1
       exit 1
@@ -250,7 +254,7 @@ client_VIPs=""
 
 for pool in $pools; do
   #VIPs for client access
-  client_VIPs+="$(/usr/bin/curl -s -u admin:123456 -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
+  client_VIPs+="$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
   echo $client_VIPs
   if [ "x$client_VIPs" == 'x' ] ; then
       echo 'Failed to retrieve cluster virtual IPs for client access, check VMSip or pool-id'
