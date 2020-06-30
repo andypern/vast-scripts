@@ -83,7 +83,7 @@ USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters 
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 CN_AVOID_ISL=1 # set to 0 if you don't care..
-EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
+EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
 ADMINPASSWORD=123456
 
