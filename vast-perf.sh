@@ -225,7 +225,7 @@ else # if we are running on an external client.
     exit 20
   fi
   # loopback isn't valid on non-cnodes
-  if [ $LOOPBACK ==1 ]; then
+  if [ $LOOPBACK == 1 ]; then
     echo "can't use loopback when not on a cnode"
     exit 20
   fi
