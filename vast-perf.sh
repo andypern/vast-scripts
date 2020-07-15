@@ -256,12 +256,13 @@ if [ "$ALT_POOL" != "empty" ];then
 fi
 
 client_VIPs=""
+all_vips=()
+
 
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
     # experimental: only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
-    all_vips=()
     ## we need to query VMS again to find out which VIPs are on this cnode.
     export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
     # query VMS 
@@ -290,7 +291,6 @@ if [ $LOOPBACK == 0 ]; then
     exit 20
   fi
   #put the vips into an array.
-  all_vips=()
   for i in $client_VIPs; do
     all_vips+=(${i})
   done
