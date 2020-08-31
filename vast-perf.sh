@@ -276,7 +276,7 @@ for pool in $pools; do
     client_VIPs+="$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
     echo $client_VIPs
     if [ "x$client_VIPs" == 'x' ] ; then
-        echo 'Failed to retrieve cluster virtual IPs for client access, check VMSip or pool-id'
+        echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id"
         exit 20
     fi
   fi
