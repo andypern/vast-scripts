@@ -130,6 +130,7 @@ while [ $# -gt 0 ]; do
     ;;
     --runtime=*)
       RUNTIME="${1#*=}"
+      RUNTIMEWRITE=$RUNTIME
       ;;
     --proto=*)
     PROTO="${1#*=}"
@@ -469,8 +470,12 @@ mount_func () {
 
 
 write_bw_test () {
+if [ -z ${RUNTIMEWRITE} ]; then
+  #didn't specify runtime, so just create files of size specified
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS}
+else
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
-
+fi
 }
 
 
