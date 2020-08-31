@@ -3,6 +3,7 @@
 
 
 #New stuff
+# now supports loopback mode when there are vlan tag interfaces.
 # In order to simplify usage...we no longer require any args. However:
 #  * if you are _not_ running on a CNode, you must specify --vms=$vip
 
@@ -83,8 +84,9 @@ USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters 
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 CN_AVOID_ISL=1 # set to 0 if you don't care..
-EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
+EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
+ADMINPASSWORD=123456
 
 ###Following are hardcoded and not change-able via args/flags.
 
@@ -177,6 +179,9 @@ while [ $# -gt 0 ]; do
     --loopback=*)
     LOOPBACK="${1#*=}"
     ;;
+    --password=*)
+    ADMINPASSWORD="${1#*=}"
+    ;;
     --help=*)
     HELPME="true"
     ;;
@@ -187,7 +192,7 @@ while [ $# -gt 0 ]; do
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
       printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
-      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--help] \n"
+      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--password=123456][--help] \n"
       printf "***************************\n"
       exit 1
       exit 1
@@ -219,12 +224,17 @@ else # if we are running on an external client.
     echo "You must specify a VMS ip via --vms=x.x.x.x"
     exit 20
   fi
+  # loopback isn't valid on non-cnodes
+  if [ $LOOPBACK == 1 ]; then
+    echo "can't use loopback when not on a cnode"
+    exit 20
+  fi
 fi
 
 
 
 
-if [[ ${TEST} == "read_bw_reuse" ]] ; then
+if [[ ${TEST} == "read_bw_reuse" ]]; then
   #this test is really only valid if you are using RDMA, otherwise you will bottleneck on a single mount per client.
   if [[ ${IS_VAST} == 1 ]] ; then
     echo "don't use read_bw_reuse on cnodes. only use this option on external clients if you are using RDMA, OR you have a lot of clients."
@@ -233,7 +243,6 @@ if [[ ${TEST} == "read_bw_reuse" ]] ; then
 fi
 
 
-# 
 
 pools=()
 
@@ -242,37 +251,52 @@ pools+=(${POOL})
 
 
 
-if [ $IS_VAST == 0 ] && [ "$ALT_POOL" != "empty" ];then
+if [ "$ALT_POOL" != "empty" ];then
   pools+=" ${ALT_POOL}"
 fi
 
 client_VIPs=""
+all_vips=()
+
 
 for pool in $pools; do
-  #VIPs for client access
-  client_VIPs+="$(/usr/bin/curl -s -u admin:123456 -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
-  echo $client_VIPs
-  if [ "x$client_VIPs" == 'x' ] ; then
-      echo 'Failed to retrieve cluster virtual IPs for client access, check VMSip or pool-id'
-      exit 20
+  if [ $LOOPBACK == 1 ]; then
+    # experimental: only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
+    # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
+    ## we need to query VMS again to find out which VIPs are on this cnode.
+    export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
+    # query VMS 
+    export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__name=cnode-${NODENUM}"| jq '.[] | .ip')
+      for local_vip in ${local_vips}; do
+        local_vip=${local_vip//\"/}
+        all_vips+=(${local_vip})
+      done
+  else
+    #not loopback..get all the vips in the pool to use.
+    client_VIPs+="$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
+    echo $client_VIPs
+    if [ "x$client_VIPs" == 'x' ] ; then
+        echo 'Failed to retrieve cluster virtual IPs for client access, check VMSip or pool-id'
+        exit 20
+    fi
   fi
 done
 
 
 
-
-numVIPS=`echo $client_VIPs | wc -w`
-if [ "$numVIPS" -lt "$JOBS" ]; then
-  echo "$numVIPS vips is < $JOBS jobs , re-run with $numVIPS or less jobs."
-  exit 20
+if [ $LOOPBACK == 0 ]; then
+  numVIPS=`echo $client_VIPs | wc -w`
+  if [ "$numVIPS" -lt "$JOBS" ]; then
+    echo "$numVIPS vips is < $JOBS jobs , re-run with $numVIPS or less jobs."
+    exit 20
+  fi
+  #put the vips into an array.
+  for i in $client_VIPs; do
+    all_vips+=(${i})
+  done
 fi
 
 
-#put the vips into an array.
-all_vips=()
-for i in $client_VIPs; do
-  all_vips+=(${i})
-done
 
 
 
@@ -289,49 +313,50 @@ if [ $IS_VAST == 1 ]; then
       exit
     fi
   fi
-
-  if [ "$CN_DIST_MODE" == "modulo" ]; then
-    #Basic methodology is that we want to shift the starting IP for each CNode, and have it mount $Numjobs (up to 12) VIPs.
-    # eg: CN1 mounts .1 -> 12 , CN2 mounts .2 -> .13 , CN3 mounts .3 -> .14 , and so on.
-    # check we have enough VIPs for this.
-    #
-    vipTEST=$(($numVIPS + 1))
-    if [[ $vipTEST -lt $(($numCNodes + $JOBS)) ]]; then
-      echo "you need at least $((($numCNodes + $JOBS) - 1)) vips"
-      exit 20
+  # next chunk of items don't apply to loopback.
+  if [ $LOOPBACK == 0 ]; then
+    if [ "$CN_DIST_MODE" == "modulo" ]; then
+      #Basic methodology is that we want to shift the starting IP for each CNode, and have it mount $Numjobs (up to 12) VIPs.
+      # eg: CN1 mounts .1 -> 12 , CN2 mounts .2 -> .13 , CN3 mounts .3 -> .14 , and so on.
+      # check we have enough VIPs for this.
+      #
+      vipTEST=$(($numVIPS + 1))
+      if [[ $vipTEST -lt $(($numCNodes + $JOBS)) ]]; then
+        echo "you need at least $((($numCNodes + $JOBS) - 1)) vips"
+        exit 20
+      fi
     fi
-  fi
-  #next, avoid crossing ISLs since we are on cnodes.
-  #temporarily setup the routing table to ensure that reads/writes go over both ifaces. assumes at least one VIP on each iface on a given cnode.
-  #
 
-  #first, figure out what ifaces we need to use.
+    #next, avoid crossing ISLs since we are on cnodes.
+    #temporarily setup the routing table to ensure that reads/writes go over both ifaces. assumes at least one VIP on each iface on a given cnode.
+    #
 
-  export EXT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep external_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
+    #first, figure out what ifaces we need to use.
 
-  # we only care if there are more than one iface.
-  export iface_count=`echo $EXT_IFACES | wc -w`
-  echo "interface count is $iface_count"
+    export EXT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep external_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
-# skip if set to loopback, since we won't be mounting across the wire anyways.
+    # we only care if there are more than one iface.
+    export iface_count=`echo $EXT_IFACES | wc -w`
+    echo "interface count is $iface_count"
 
-  if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ] && [ $LOOPBACK == 0 ] ; then 
-    # sometimes the route is OK, sometimes its not,  check them all and only change if they are 'wrong'
-    for iface in $EXT_IFACES
-      do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
-      #now check what the route looks like on this node for each ip.
-      for IP in ${IPS_TO_ROUTE}
-        do current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
-        if [[ ${current_route} == $iface ]] ; then
-          echo "route is OK for $IP -> $iface , skipping"
-        else
-          echo "temporarily changing route for $IP -> $iface"
-          sudo /sbin/ip route add ${IP}/32 dev ${iface}
-        fi
+    if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ] ; then 
+      # sometimes the route is OK, sometimes its not,  check them all and only change if they are 'wrong'
+      for iface in $EXT_IFACES; do #this won't work if there is a vlan tag on the pool.
+        export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+        #now check what the route looks like on this node for each ip.
+        for IP in ${IPS_TO_ROUTE}; do 
+          current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
+          if [[ ${current_route} == $iface ]] ; then
+            echo "route is OK for $IP -> $iface , skipping"
+          else
+            echo "temporarily changing route for $IP -> $iface"
+            sudo /sbin/ip route add ${IP}/32 dev ${iface}
+          fi
+        done
       done
-    done
-  else
-    echo "skipping route setup"
+    else
+      echo "skipping route setup"
+    fi
   fi
 fi
 ####End CNode specific stuff.###
@@ -355,24 +380,12 @@ else
   #either we're not on a vast cnode, or you chose random distribution.
   #Better logic could be had here, but for now just randomize the vip list, and iterate through them until numJobs is satisfied.
 
-  if [ $LOOPBACK == 1 ]; then
-    # experimental: only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
-    # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
-    all_vips=()
-    for iface in $EXT_IFACES; do
-      export local_vips=$(/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
-      for local_vip in ${local_vips}; do
-        all_vips+=(${local_vip})
-      done
-    done
-  fi
   # regardless of how we got here, shuffle the vips and only use as  many as we need to satisfy the job count, if we have enough.
-  all_vips=( $(shuf -e "${all_vips[@]}") )
+  #all_vips=( $(shuf -e "${all_vips[@]}") )
   needed_vips=()
-  for ((idx=0; idx<${JOBS} && idx+1<${#all_vips[@]}; ++idx)); do
+  for ((idx=0; idx<${JOBS} && idx<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
   done
-
 fi
 
 
@@ -387,11 +400,11 @@ avoid_isl_func () {
     # be able to talk directly to the iface on the CNode.  This assumes that the clients have ib0 on the same switch
     # that the cnode has ib0 on.
     CLIENT_IFACES="ib0 ib1"
-    for iface in $CLIENT_IFACES
-      do export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
+    for iface in $CLIENT_IFACES; do 
+      export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
       #now check what the route looks like on this node for each ip.
-      for IP in ${IPS}
-        do current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
+      for IP in ${IPS}; do 
+        current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
         if [[ ${current_route} == $iface ]] ; then
           echo "route is OK for $IP -> $iface , skipping"
         else
@@ -501,7 +514,7 @@ cleanup() {
 
 
   
-  if [ $IS_VAST == 1 ]; then
+  if [ $IS_VAST == 1 ] && [ $LOOPBACK == 0 ]; then
     if [[ $iface_count -eq 2 ]] ; then
       for iface in $EXT_IFACES
         do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
