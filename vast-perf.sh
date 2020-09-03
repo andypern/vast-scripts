@@ -72,6 +72,7 @@ TEST="read_bw" # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops' , 'cl
 RUNTIME=120 # runtime in seconds of the test.
 JOBS=8 # how many threads per host. This will also result in N mountpoints per host.
 SIZE="20g" # size of each file, one per thread.
+BLOCKSIZE="1mb" #leave alone for max b/w. Note that this only applies to the b/w tests, for iops tests it will be 4kb (hardcoded)
 POOL=1 # what pool to run on, typically this will be '1', but check!
 PROTO="tcp" #rdma or tcp.  When in doubt, use tcp
 REMOTE_PATH="fio" # change this to whatever you want it to be. This is the subdir underneath the export which will be created.
@@ -83,6 +84,7 @@ iodepth=8 #For b/w tests, lower values can result in slightly better latency.  F
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
+PROXY="empty" #use IP:port if you need a proxy to get to VMS.
 CN_AVOID_ISL=1 # set to 0 if you don't care..
 EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
@@ -122,6 +124,9 @@ while [ $# -gt 0 ]; do
     --vms=*)
       mVIP="${1#*=}"
       ;;
+    --proxy=*)
+    PROXY="${1#*=}"
+    ;;
     --export=*)
       NFSEXPORT="${1#*=}"
       ;;
@@ -140,6 +145,9 @@ while [ $# -gt 0 ]; do
     ;;
     --size=*)
     SIZE="${1#*=}"
+    ;;
+    --block-size=*)
+    BLOCKSIZE="${1#*=}"
     ;;
     --pool=*)
     POOL="${1#*=}"
@@ -234,7 +242,6 @@ fi
 
 
 
-
 if [[ ${TEST} == "read_bw_reuse" ]]; then
   #this test is really only valid if you are using RDMA, otherwise you will bottleneck on a single mount per client.
   if [[ ${IS_VAST} == 1 ]] ; then
@@ -259,6 +266,10 @@ fi
 client_VIPs=""
 all_vips=()
 
+if [ "$PROXY" != "empty" ];then
+  export http_proxy=${PROXY}
+fi
+
 
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
@@ -274,7 +285,12 @@ for pool in $pools; do
       done
   else
     #not loopback..get all the vips in the pool to use.
-    client_VIPs+="$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
+    CURL_OPTS="-s -u admin:${ADMINPASSWORD} -H 'accept: application/json' --insecure"
+    if [ "$PROXY" != "empty" ];then
+      CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
+    fi
+
+    client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
     echo $client_VIPs
     if [ "x$client_VIPs" == 'x' ] ; then
         echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id"
@@ -296,8 +312,6 @@ if [ $LOOPBACK == 0 ]; then
     all_vips+=(${i})
   done
 fi
-
-
 
 
 
@@ -390,6 +404,11 @@ else
 fi
 
 
+
+#check vip list to make sure there are vips to mount, otherwise fail
+
+
+
 avoid_isl_func () {
   # experimental.  this only applies if you are NOT running on cnodes, since we already have a hack for that.
   # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
@@ -455,8 +474,22 @@ mount_func () {
           do sudo mkdir -p ${MOUNT}/${i}
           if [[ ${PROTO} == "rdma" ]] ; then
             sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+            if [ $? -eq 0 ]; then 
+              echo "mounted ${MOUNT} ok"
+            else 
+              echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
+              cleanup
+              exit
+            fi
           else
             sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+            if [ $? -eq 0 ]; then 
+              echo "mounted ${MOUNT} ok"
+            else 
+              echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
+              cleanup
+              exit
+            fi
           fi
           export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
           DIRS+=${fio_dir}:
@@ -476,11 +509,12 @@ if [ -z ${RUNTIMEWRITE} ]; then
 else
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
 fi
+
 }
 
 
 read_bw_test () {
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randread --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME} $EXTRA_FIO_ARGS
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randread --bs=${BLOCKSIZE} --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME} $EXTRA_FIO_ARGS
 }
 
 
@@ -497,8 +531,9 @@ read_iops_test () {
 read_bw_reuse_test () {
   rando_dir=${MOUNT}/${all_vips[0]}/${REMOTE_PATH}
   echo ${rando_dir}
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT}ß --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
+  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randrw --bs=${BLOCKSIZE} --direct=${DIRECT} --numjobs=${JOBS} --rwmixread=100 --group_reporting --opendir=${rando_dir} --time_based=1 --runtime=${RUNTIME}
 }
+
 
 
 cleanup() {
