@@ -85,17 +85,22 @@ USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters 
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
 ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
 PROXY="empty" #use IP:port if you need a proxy to get to VMS.
-CN_AVOID_ISL=1 # set to 0 if you don't care..
 EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
 ADMINPASSWORD=123456
+LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this requires a lot of vips..
+
+###experimental flags ###
+
+CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
+
+
 
 ###Following are hardcoded and not change-able via args/flags.
 
 USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
 NOT_CNODE=0 # this only applies in the lab. leave at 0 normally
-CLIENT_ISL_AVOID=0 # experimental.
-LOOPBACK=0 # also experimental.
+CLIENT_ISL_AVOID=0 # experimental. only for use in the lab. it can change routes.
 ###end vars.###
 
 
@@ -279,13 +284,19 @@ for pool in $pools; do
     export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
     # query VMS 
     export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__name=cnode-${NODENUM}"| jq '.[] | .ip')
+        if [ "x$local_vips" == 'x' ] ; then
+          echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id. Also: make sure that this CNode is a member of the pool you want to test with."
+          exit 20
+        fi
       for local_vip in ${local_vips}; do
         local_vip=${local_vip//\"/}
         all_vips+=(${local_vip})
       done
   else
     #not loopback..get all the vips in the pool to use.
-    CURL_OPTS="-s -u admin:${ADMINPASSWORD} -H 'accept: application/json' --insecure"
+    #CURL_OPTS="-s -u admin:${ADMINPASSWORD} -H 'accept: application/json' --insecure"
+    CURL_OPTS="-s -u admin:${ADMINPASSWORD} --insecure"
+
     if [ "$PROXY" != "empty" ];then
       CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
     fi
@@ -396,7 +407,7 @@ else
   #Better logic could be had here, but for now just randomize the vip list, and iterate through them until numJobs is satisfied.
 
   # regardless of how we got here, shuffle the vips and only use as  many as we need to satisfy the job count, if we have enough.
-  #all_vips=( $(shuf -e "${all_vips[@]}") )
+  all_vips=( $(shuf -e "${all_vips[@]}") )
   needed_vips=()
   for ((idx=0; idx<${JOBS} && idx<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
@@ -600,6 +611,9 @@ elif [[ ${TEST} == "read_bw_reuse" ]] ; then
 elif [[ ${TEST} == "cleanup" ]] ; then
   mount_func
   cleanup
+elif [[ ${TEST} == "mount_only" ]] ; then
+  mount_func
+  echo "done mounting, existing and leaving mounts. if you want to unmount, run with --test=cleanup"
 else
   echo "you didn't specify a valid test. unmounting and exiting"
 fi
