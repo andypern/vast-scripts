@@ -52,7 +52,7 @@
 # you don't _need_ clustershell/clush , but it makes it easier to run this on multiple hosts.
 
 # 1.  put this script on client-1 (whatever that is)
-# 2.  'bash vast-perf.sh --vms=x.x.x.x'  <--only runs on one host.
+# 2.  'bash vast-perf.sh --vms=x.x.x.x --pool=2 --proto=rdma'  <--only runs on one host.
 # 3.  Once you verify it works, copy to all hosts (using whatever mechanism you have)
 # 4.  run on all hosts..here's a clush example, but pdsh/etc can work: clush -g clients "bash /home/vastdata/vast-perf.sh --vms=x.x.x.x"
 # 5.  Specify different tests with the '--test=' flag (write_bw , read_iops, write_iops)
@@ -84,7 +84,7 @@ ioengine=libaio #use libaio most of the time. other options: posixaio
 iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
-ALT_POOL="empty" # experimental. don't set this or use alt-pool option.
+ALT_POOL="empty" # experimental. don't set this or use --alt-pool "2 3 4 5" option.
 PROXY="empty" #use IP:port if you need a proxy to get to VMS.
 EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
@@ -96,7 +96,10 @@ CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are d
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
 NCONNECT=32 #
-
+FORCE_RDMA=0 #only set to 1, or use --forcerdma if you know what you are doing.
+NOVMS=0 # not implemented yet
+STARTIP=XXX #not implemented yet
+ENDIP=XXXX #not implemented yet
 
 ###Following are hardcoded and not change-able via args/flags.
 
@@ -146,6 +149,9 @@ while [ $# -gt 0 ]; do
       ;;
     --proto=*)
     PROTO="${1#*=}"
+    ;;
+    --forcerdma=*)
+    FORCE_RDMA="${1#*=}"
     ;;
     --jobs=*)
     JOBS="${1#*=}"
@@ -234,8 +240,12 @@ if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
   IS_VAST=1
   mVIP=`cat /vast/vman/mgmt-vip`
   echo "running on a Vast node. setting VMSIP to ${mVIP}"
-  if [ ${PROTO} == "rdma" ] || [ ${PROTO} == "multipath" ] ; then
-    echo "Using TCP for mounts."
+  if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ] ; then
+    echo "on a cnode, not using rdma, falling back to tcp."
+    PROTO=tcp
+  fi
+  if [ ${PROTO} == "multipath" ] ; then
+    echo "can't use multipath on cnode, falling back to tcp"
     PROTO=tcp
   fi
 else # if we are running on an external client.
