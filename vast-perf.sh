@@ -103,7 +103,7 @@ ENDIP=XXXX #not implemented yet
 
 ###Following are hardcoded and not change-able via args/flags.
 
-USABLE_CNODES=8 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
+USABLE_CNODES=15 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
 NOT_CNODE=0 # this only applies in the lab. leave at 0 normally
 CLIENT_ISL_AVOID=0 # experimental. only for use in the lab. it can change routes.
 ###end vars.###
