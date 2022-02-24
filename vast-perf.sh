@@ -240,13 +240,14 @@ if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
   IS_VAST=1
   mVIP=`cat /vast/vman/mgmt-vip`
   echo "running on a Vast node. setting VMSIP to ${mVIP}"
-  if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ] ; then
-    echo "on a cnode, not using rdma, falling back to tcp."
-    PROTO=tcp
-  fi
+  #next block is commented out. as of newer vast-os, rdma should work.
+#  if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ] ; then
+#    echo "on a cnode, not using rdma, falling back to tcp."
+#    PROTO=tcp
+#  fi
   if [ ${PROTO} == "multipath" ] ; then
     echo "can't use multipath on cnode, falling back to tcp"
-    PROTO=tcp
+    PROTO=rdma
   fi
 else # if we are running on an external client.
   if [[ ${mVIP} == "empty" ]] ; then
