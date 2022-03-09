@@ -96,7 +96,7 @@ CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are d
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
 NCONNECT=32 #
-FORCE_RDMA=0 #only set to 1, or use --forcerdma if you know what you are doing.
+FORCE_RDMA=0 #this is deprecated/not used anymore.
 NOVMS=0 # not implemented yet
 STARTIP=XXX #not implemented yet
 ENDIP=XXXX #not implemented yet
@@ -291,12 +291,34 @@ fi
 
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
+  
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
 
+    #nowadays..vast-OS supports RDMA.  So, default to it when running on loopback mode.
+
+    PROTO=rdma
+
     # in 4.2, we changed how we name nodes.  So, instead of using node-names in the filter...we will use the internal IP.
-    #
-    export INT_IP=`/sbin/ip a s bond0.69|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
+    # also, the way this works is different on an IB backend cluster vs an ETH cluster.
+    #first..figure out if we have an IB nic for internal
+
+
+    export INT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep internal_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
+
+    # 
+    if [[ "$INT_IFACES" =~ .*"enp".* ]]; then
+      echo "ETH backend"
+      BOND_IFACE="bond0.69"
+    elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
+      echo "ETH backend"
+      BOND_IFACE="bond0"
+    else
+      echo "int ifaces: ${INT_IFACES} : not recognized as 'enp' or 'ib' , exiting"
+      exit 20
+    fi
+
+    export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
     # query VMS 
     export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
 # old way..commented out.
