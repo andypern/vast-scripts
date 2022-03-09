@@ -66,7 +66,7 @@
 #
 #
 mVIP="empty"  # the VMS-VIP of the vast cluster you are testing against. If you run on CNodes, don't worry about setting.  If you run on an external client, you must specify the VMS-VIP with --vms=ip
-
+VIPFILE="empty" #use at own risk.
 NFSEXPORT="/" # the NFS export to use.  On a brand new cluster use '/' (no quotes)
 TEST="read_bw" # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops' , 'cleanup'
 RUNTIME=120 # runtime in seconds of the test.
@@ -207,6 +207,9 @@ while [ $# -gt 0 ]; do
     --password=*)
     ADMINPASSWORD="${1#*=}"
     ;;
+    --vipfile=*)
+    VIPFILE="${1#*=}"
+    ;;
     --help=*)
     HELPME="true"
     ;;
@@ -291,7 +294,12 @@ fi
 
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
-  
+
+        if [ VIPFILE != "empty" ]; then 
+          echo "you can't specify --vipfile=${VIPFILE} && looback=1. If you want to use a vipfile, use loopback=0"
+          exit 20
+        fi
+
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
 
@@ -321,8 +329,8 @@ for pool in $pools; do
     export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
     # query VMS 
     export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
-# old way..commented out.
-    #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
+    # old way..commented out.
+      #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
 
     #export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__name=cnode-${NODENUM}"| jq '.[] | .ip')
         if [ "x$local_vips" == 'x' ] ; then
@@ -335,14 +343,19 @@ for pool in $pools; do
       done
   else
     #not loopback..get all the vips in the pool to use.
-    #CURL_OPTS="-s -u admin:${ADMINPASSWORD} -H 'accept: application/json' --insecure"
-    CURL_OPTS="-s -u admin:${ADMINPASSWORD} --insecure"
 
-    if [ "$PROXY" != "empty" ];then
-      CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
+    if [ VIPFILE != "empty" ]; then #super experimental
+      # grab the vips from a file..which must be formatted perfectly..or you die.
+      client_VIPs="$(cat ${VIPFILE})"   
+    else #use curl to grab the VIPs
+      CURL_OPTS="-s -u admin:${ADMINPASSWORD} --insecure"
+
+      if [ "$PROXY" != "empty" ];then
+        CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
+      fi
+
+      client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
     fi
-
-    client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
     echo $client_VIPs
     if [ "x$client_VIPs" == 'x' ] ; then
         echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id"
@@ -364,6 +377,7 @@ if [ $LOOPBACK == 0 ]; then
     all_vips+=(${i})
   done
 fi
+
 
 
 
@@ -470,9 +484,11 @@ else
   needed_vips=()
   for ((idx=0; idx<${JOBS} && idx<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
+#    echo "${all_vips[$idx]} is in the mix"
   done
 fi
 
+#echo "needed: ${needed_vips}"
 
 
 #check vip list to make sure there are vips to mount, otherwise fail
@@ -543,12 +559,13 @@ mount_func () {
   for i in ${needed_vips[@]}
           do sudo mkdir -p ${MOUNT}/${i}
           if [[ ${PROTO} == "rdma" ]] ; then
+            echo "sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
             sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
             if [ $? -eq 0 ]; then 
               echo "mounted ${MOUNT} ok"
             else 
               echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
-              cleanup
+              #cleanup
               exit
             fi
           else
