@@ -295,10 +295,10 @@ fi
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
 
-        if [ VIPFILE != "empty" ]; then 
-          echo "you can't specify --vipfile=${VIPFILE} && looback=1. If you want to use a vipfile, use loopback=0"
-          exit 20
-        fi
+       # if [ VIPFILE != "empty" ]; then 
+       #   echo "you can't specify --vipfile=${VIPFILE} && looback=1. If you want to use a vipfile, use loopback=0"
+       #   exit 20
+       # fi
 
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
@@ -319,7 +319,7 @@ for pool in $pools; do
       echo "ETH backend"
       BOND_IFACE="bond0.69"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
-      echo "ETH backend"
+      echo "IB backend"
       BOND_IFACE="bond0"
     else
       echo "int ifaces: ${INT_IFACES} : not recognized as 'enp' or 'ib' , exiting"
@@ -328,10 +328,16 @@ for pool in $pools; do
 
     export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
     # query VMS 
-    export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
+
+     if [ VIPFILE != "empty" ]; then #super experimental
+      # grab the vips from a file..which must be formatted perfectly..or you die.
+      local_vips="$(cat ${VIPFILE})"   
+    else
+      export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
     # old way..commented out.
       #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
-
+    fi
+    
     #export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__name=cnode-${NODENUM}"| jq '.[] | .ip')
         if [ "x$local_vips" == 'x' ] ; then
           echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id. Also: make sure that this CNode is a member of the pool you want to test with."
