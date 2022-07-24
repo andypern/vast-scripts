@@ -319,7 +319,7 @@ for pool in $pools; do
     export INT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep internal_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
     # 
-    if [[ "$INT_IFACES" =~ .*"enp".* ]]; then
+    if [[ "$INT_IFACES" =~ .*"en".* ]]; then
       echo "ETH backend"
       BOND_IFACE="bond0.69"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
