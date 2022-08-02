@@ -333,7 +333,7 @@ for pool in $pools; do
     export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
     # query VMS 
 
-     if [ VIPFILE != "empty" ]; then #super experimental
+     if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
       local_vips="$(cat ${VIPFILE})"   
     else
@@ -353,7 +353,7 @@ for pool in $pools; do
   else
     #not loopback..get all the vips in the pool to use.
 
-    if [ VIPFILE != "empty" ]; then #super experimental
+    if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
       client_VIPs="$(cat ${VIPFILE})"   
     else #use curl to grab the VIPs
