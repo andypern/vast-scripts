@@ -337,6 +337,7 @@ for pool in $pools; do
       # grab the vips from a file..which must be formatted perfectly..or you die.
       local_vips="$(cat ${VIPFILE})"   
     else
+      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure"
       export local_vips=$(/usr/bin/curl ${CURL_OPTS} -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
     # old way..commented out.
       #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
