@@ -88,6 +88,7 @@ ALT_POOL="empty" # experimental. don't set this or use --alt-pool "2 3 4 5" opti
 PROXY="empty" #use IP:port if you need a proxy to get to VMS.
 EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
+ADMINUSER="admin"
 ADMINPASSWORD=123456
 LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this requires a lot of vips..
 ###experimental flags ###
@@ -204,6 +205,9 @@ while [ $# -gt 0 ]; do
     --loopback=*)
     LOOPBACK="${1#*=}"
     ;;
+    --user=*)
+    ADMINUSER="${1#*=}"
+    ;;
     --password=*)
     ADMINPASSWORD="${1#*=}"
     ;;
@@ -315,7 +319,7 @@ for pool in $pools; do
     export INT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep internal_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
     # 
-    if [[ "$INT_IFACES" =~ .*"enp".* ]]; then
+    if [[ "$INT_IFACES" =~ .*"en".* ]]; then
       echo "ETH backend"
       BOND_IFACE="bond0.69"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
@@ -329,16 +333,16 @@ for pool in $pools; do
     export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
     # query VMS 
 
-     if [ VIPFILE != "empty" ]; then #super experimental
+     if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
       local_vips="$(cat ${VIPFILE})"   
     else
-      export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
+      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure"
+      export local_vips=$(/usr/bin/curl ${CURL_OPTS} -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
     # old way..commented out.
       #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
     fi
     
-    #export local_vips=$(/usr/bin/curl -s -u admin:$ADMINPASSWORD -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__name=cnode-${NODENUM}"| jq '.[] | .ip')
         if [ "x$local_vips" == 'x' ] ; then
           echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id. Also: make sure that this CNode is a member of the pool you want to test with."
           exit 20
@@ -350,11 +354,11 @@ for pool in $pools; do
   else
     #not loopback..get all the vips in the pool to use.
 
-    if [ VIPFILE != "empty" ]; then #super experimental
+    if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
       client_VIPs="$(cat ${VIPFILE})"   
     else #use curl to grab the VIPs
-      CURL_OPTS="-s -u admin:${ADMINPASSWORD} --insecure"
+      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure"
 
       if [ "$PROXY" != "empty" ];then
         CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
