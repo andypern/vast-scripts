@@ -253,7 +253,7 @@ if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
 #    PROTO=tcp
 #  fi
   if [ ${PROTO} == "multipath" ] ; then
-    echo "can't use multipath on cnode, falling back to tcp"
+    echo "can't use multipath on cnode, falling back to regular rdma"
     PROTO=rdma
   fi
 else # if we are running on an external client.
@@ -307,9 +307,24 @@ for pool in $pools; do
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
 
-    #nowadays..vast-OS supports RDMA.  So, default to it when running on loopback mode.
+    #nowadays..vast-OS supports RDMA.  So, default to it when running on loopback mode. The exception is on broadcom NIC's.
+    # basically:
+    # 1.  check the internal_virtual ifaces to see if 'ens95s..' shows up. that is a bcm. another way to check is to look for the driver: `sudo lsmod|grep bnxt_en|wc -l`
+    # 2.  check to see if it is a single or dual-NIC cnode. If its single NIC, then flip to TCP.  If its dual-NIC, then maybe we can do RDMA? For now, just flip to TCP.
+    #
 
-    PROTO=rdma
+    IS_BCM=0
+
+    LSMOD=`sudo lsmod|grep bnxt_en|wc -l`
+
+    if [ "$LSMOD" -gt "0" ]; then
+      export IS_BCM=1
+      PROTO=tcp
+    else
+      PROTO=rdma
+    fi
+
+    echo "setting PROTO to ${PROTO}"
 
     # in 4.2, we changed how we name nodes.  So, instead of using node-names in the filter...we will use the internal IP.
     # also, the way this works is different on an IB backend cluster vs an ETH cluster.
@@ -324,7 +339,7 @@ for pool in $pools; do
       BOND_IFACE="bond0.69"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
       echo "IB backend"
-      BOND_IFACE="bond0"
+      BOND_IFACE="bond0"uh
     else
       echo "int ifaces: ${INT_IFACES} : not recognized as 'enp' or 'ib' , exiting"
       exit 20
