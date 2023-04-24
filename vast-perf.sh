@@ -339,7 +339,7 @@ for pool in $pools; do
       BOND_IFACE="bond0.69"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
       echo "IB backend"
-      BOND_IFACE="bond0"uh
+      BOND_IFACE="bond0"
     else
       echo "int ifaces: ${INT_IFACES} : not recognized as 'enp' or 'ib' , exiting"
       exit 20
