@@ -320,11 +320,21 @@ for pool in $pools; do
     if [ "$LSMOD" -gt "0" ]; then
       export IS_BCM=1
       PROTO=tcp
+      echo "setting PROTO to ${PROTO} because broadcom"
     else
       PROTO=rdma
+      echo "setting PROTO to ${PROTO} for now.."
+
     fi
 
-    echo "setting PROTO to ${PROTO}"
+
+    if grep -q "Rocky" /etc/redhat-release; then
+      PROTO=tcp
+      echo "setting PROTO to ${PROTO} because rocky"
+    else
+        echo "Not Rocky, carrying on with ${PROTO}"
+    fi
+
 
     # in 4.2, we changed how we name nodes.  So, instead of using node-names in the filter...we will use the internal IP.
     # also, the way this works is different on an IB backend cluster vs an ETH cluster.
@@ -345,7 +355,13 @@ for pool in $pools; do
       exit 20
     fi
 
-    export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|awk {'print $2'}|sed -E 's/\/[0-9]+//'`
+
+
+###we need to know what the "inner vip" is.
+
+    export INNER_VIP=$(cat /etc/vast-configure_network.py-params.ini|grep mgmt_inner_vip|awk -F "=" {'print $2'})
+
+    export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|grep -v ${INNER_VIP} | awk {'print $2'}|sed -E 's/\/[0-9]+//'`
     # query VMS 
 
      if [ $VIPFILE != "empty" ]; then #super experimental
