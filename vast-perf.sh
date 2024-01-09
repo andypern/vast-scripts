@@ -347,11 +347,14 @@ for pool in $pools; do
     if [[ "$INT_IFACES" =~ .*"en".* ]]; then
       echo "ETH backend"
       BOND_IFACE="bond0.69"
+    elif [[ "$INT_IFACES" =~ .*"p2p".* ]]; then
+      echo "ETH backend"
+      BOND_IFACE="bond0.69"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
       echo "IB backend"
       BOND_IFACE="bond0"
     else
-      echo "int ifaces: ${INT_IFACES} : not recognized as 'enp' or 'ib' , exiting"
+      echo "int ifaces: ${INT_IFACES} : not recognized as 'en', 'p2p',  or 'ib' , exiting"
       exit 20
     fi
 
