@@ -343,13 +343,15 @@ for pool in $pools; do
 
     export INT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep internal_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
+    export DATA_VLAN=$(cat /etc/vast-configure_network.py-params.ini|grep data_vlan|awk -F "=" {'print $2'}| sed -E 's/,/ /')
+
     # 
     if [[ "$INT_IFACES" =~ .*"en".* ]]; then
       echo "ETH backend"
-      BOND_IFACE="bond0.69"
+      BOND_IFACE="bond0.${DATA_VLAN}"
     elif [[ "$INT_IFACES" =~ .*"p2p".* ]]; then
       echo "ETH backend"
-      BOND_IFACE="bond0.69"
+      BOND_IFACE="bond0.${DATA_VLAN}"
     elif [[ "$INT_IFACES" =~ .*"ib".* ]]; then
       echo "IB backend"
       BOND_IFACE="bond0"
@@ -371,7 +373,7 @@ for pool in $pools; do
       # grab the vips from a file..which must be formatted perfectly..or you die.
       local_vips="$(cat ${VIPFILE})"   
     else
-      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure"
+      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
       export local_vips=$(/usr/bin/curl ${CURL_OPTS} -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
     # old way..commented out.
       #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
@@ -392,7 +394,7 @@ for pool in $pools; do
       # grab the vips from a file..which must be formatted perfectly..or you die.
       client_VIPs="$(cat ${VIPFILE})"   
     else #use curl to grab the VIPs
-      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure"
+      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
 
       if [ "$PROXY" != "empty" ];then
         CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
