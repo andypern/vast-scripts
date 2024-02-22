@@ -156,24 +156,34 @@ mount_func () {
   DIRS=()
   MD_DIRS=()
 
+  # Do the mounts. Stash away the command and the verbose output format
+  # but only output them on mount failure to reduce noise.
+
   for i in ${needed_vips[@]}; do
     sudo mkdir -p ${MOUNT}/${i}
     if [[ ${PROTO} == "rdma" ]]; then
-      echo "sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
-      sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+      mount_cmd="sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
+      mount_output=$(eval $mount_cmd 2>&1)
       if [ $? -eq 0 ]; then
-        echo "mounted ${MOUNT} ok"
+        echo "mounted ${MOUNT}/${i} ok"
       else
-        echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
-        #cleanup
+        echo "mount of ${MOUNT}/${i} failed : $? , going to unmount everything and exit"
+        echo "Command: $mount_cmd"
+        echo "Output:"
+        echo "$mount_output"
+        cleanup
         exit
       fi
     else
-      sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+      mount_cmd="sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
+      mount_output=$(eval $mount_cmd 2>&1)
       if [ $? -eq 0 ]; then
-        echo "mounted ${MOUNT} ok"
+        echo "mounted ${MOUNT}/${i} ok"
       else
-        echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
+        echo "mount of ${MOUNT}/${i} failed : $? , going to unmount everything and exit"
+        echo "Command: $mount_cmd"
+        echo "Output:"
+        echo "$mount_output"
         cleanup
         exit
       fi
@@ -183,8 +193,6 @@ mount_func () {
     sudo mkdir -p ${fio_dir}
     sudo chmod 777 ${fio_dir}
   done
-
-  echo ${DIRS}
 }
 
 multipath_func () {
