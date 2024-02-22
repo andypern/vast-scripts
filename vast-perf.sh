@@ -96,7 +96,6 @@ LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this r
 CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
-FORCE_RDMA=0 #this is deprecated/not used anymore.
 
 ###Following are hardcoded and not change-able via args/flags.
 USABLE_CNODES=15 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
@@ -341,9 +340,6 @@ while [ $# -gt 0 ]; do
     --proto=*)
       PROTO="${1#*=}"
       ;;
-    --forcerdma=*)
-      FORCE_RDMA="${1#*=}"
-      ;;
     --jobs=*)
       JOBS="${1#*=}"
       ;;
@@ -434,14 +430,30 @@ if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
   IS_VAST=1
   mVIP=`cat /vast/vman/mgmt-vip`
   echo "running on a Vast node. setting VMSIP to ${mVIP}"
-  #next block is commented out. as of newer vast-os, rdma should work.
-  # if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ]; then
-  #   echo "on a cnode, not using rdma, falling back to tcp."
-  #   PROTO=tcp
-  # fi
+
   if [ ${PROTO} == "multipath" ]; then
     echo "can't use multipath on cnode, falling back to regular rdma"
     PROTO=rdma
+  fi
+
+  # Nowadays, vast-OS supports RDMA so default to it when running on loopback
+  # mode, but first check two exceptions: Broadcom NICs & Rocky
+
+  # Check for the Broadcom driver
+  LSMOD=`sudo lsmod|grep bnxt_en|wc -l`
+  if [ "$LSMOD" -gt "0" ]; then
+    PROTO=tcp
+    echo "setting PROTO to ${PROTO} because broadcom"
+
+  # Check for Rocky
+  elif grep -q "Rocky" /etc/redhat-release; then
+    PROTO=tcp
+    echo "setting PROTO to ${PROTO} because rocky"
+
+  # by default, use RDMA
+  else
+    PROTO=rdma
+    echo "setting PROTO to ${PROTO} because cnode"
   fi
 else # if we are running on an external client.
   if [[ ${mVIP} == "empty" ]]; then
@@ -491,32 +503,6 @@ for pool in $pools; do
 
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
-
-    #nowadays..vast-OS supports RDMA.  So, default to it when running on loopback mode. The exception is on broadcom NIC's.
-    # basically:
-    # 1.  check the internal_virtual ifaces to see if 'ens95s..' shows up. that is a bcm. another way to check is to look for the driver: `sudo lsmod|grep bnxt_en|wc -l`
-    # 2.  check to see if it is a single or dual-NIC cnode. If its single NIC, then flip to TCP.  If its dual-NIC, then maybe we can do RDMA? For now, just flip to TCP.
-    #
-
-    IS_BCM=0
-
-    LSMOD=`sudo lsmod|grep bnxt_en|wc -l`
-
-    if [ "$LSMOD" -gt "0" ]; then
-      export IS_BCM=1
-      PROTO=tcp
-      echo "setting PROTO to ${PROTO} because broadcom"
-    else
-      PROTO=rdma
-      echo "setting PROTO to ${PROTO} for now.."
-    fi
-
-    if grep -q "Rocky" /etc/redhat-release; then
-      PROTO=tcp
-      echo "setting PROTO to ${PROTO} because rocky"
-    else
-        echo "Not Rocky, carrying on with ${PROTO}"
-    fi
 
     # in 4.2, we changed how we name nodes.  So, instead of using node-names in the filter...we will use the internal IP.
     # also, the way this works is different on an IB backend cluster vs an ETH cluster.
