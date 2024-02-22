@@ -96,11 +96,7 @@ LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this r
 CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
-NCONNECT=32 #
 FORCE_RDMA=0 #this is deprecated/not used anymore.
-NOVMS=0 # not implemented yet
-STARTIP=XXX #not implemented yet
-ENDIP=XXXX #not implemented yet
 
 ###Following are hardcoded and not change-able via args/flags.
 
@@ -226,7 +222,6 @@ while [ $# -gt 0 ]; do
       printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
       printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--password=123456][--help] \n"
       printf "***************************\n"
-      exit 1
       exit 1
   esac
   shift
@@ -375,8 +370,6 @@ for pool in $pools; do
     else
       CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
       export local_vips=$(/usr/bin/curl ${CURL_OPTS} -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
-    # old way..commented out.
-      #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
     fi
     
         if [ "x$local_vips" == 'x' ] ; then
@@ -534,8 +527,6 @@ else
   done
 fi
 
-#echo "needed: ${needed_vips}"
-
 
 #check vip list to make sure there are vips to mount, otherwise fail
 
@@ -646,9 +637,6 @@ all_vips=( $(shuf -e "${all_vips[@]}") )
   for ((idx=0; idx<${JOBS} && idx<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
   done
-
-# next, we 
-
 }
 
 
