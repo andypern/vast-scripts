@@ -549,12 +549,12 @@ remove_isl_func() {
   # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
   if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ]; then
     CLIENT_IFACES="ib0 ib1"
-    for iface in $CLIENT_IFACES
-      do export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
+    for iface in $CLIENT_IFACES; do
+      export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
       #now check what the route looks like on this node for each ip.
-      for IP in ${IPS}
+      for IP in ${IPS}; do
         #this just deletes all /32 routes that we might have..
-        do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
+        sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
       done
     done
   fi
@@ -571,8 +571,8 @@ mount_func () {
   DIRS=()
   MD_DIRS=()
 
-  for i in ${needed_vips[@]}
-    do sudo mkdir -p ${MOUNT}/${i}
+  for i in ${needed_vips[@]}; do
+    sudo mkdir -p ${MOUNT}/${i}
     if [[ ${PROTO} == "rdma" ]]; then
       echo "sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
       sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
@@ -698,11 +698,11 @@ cleanup() {
           done
         done
       else #the normal path
-        for iface in $EXT_IFACES
-          do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
-          for IP in ${IPS_TO_ROUTE}
+        for iface in $EXT_IFACES; do
+          export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+          for IP in ${IPS_TO_ROUTE}; do
             # a little heavy handed, but its OK.
-            do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
+            sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
           done
         done
       fi
