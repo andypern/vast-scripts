@@ -41,8 +41,8 @@
 
 ##Running on a CNode
 # 1.  put this script on Cnode-1
-# 2.  'bash /home/vastdata/vast-perf.sh'  <--only runs on one host it will run with config defaults (see below), and discover VMS ip.  
-# 3.  Once you verify it works, copy to all cnodes: `clush -g cnodes -c /home/vastdata/vast-perf.sh`. 
+# 2.  'bash /home/vastdata/vast-perf.sh'  <--only runs on one host it will run with config defaults (see below), and discover VMS ip.
+# 3.  Once you verify it works, copy to all cnodes: `clush -g cnodes -c /home/vastdata/vast-perf.sh`.
 # 4.  Run on all Cnodes like this `clush -g cnodes "bash /home/vastdata/vast-perf.sh"`
 # 5.  Specify different tests with the '--test=' flag (write_bw , read_iops, write_iops)
 # 6.  Run like this to clean everything up: `clush -g cnodes "bash /home/vastdata/vast-perf.sh --test=cleanup --delete=1"`
@@ -60,7 +60,7 @@
 
 
 
-## Variables.  
+## Variables.
 # Below are defaults (which will get overridden by user specified ARGS).  Don't set these variables directly, use the '--' args.
 #
 #
@@ -91,26 +91,18 @@ DIRECT=1 # o_direct or not..
 ADMINUSER="admin"
 ADMINPASSWORD=123456
 LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this requires a lot of vips..
-###experimental flags ###
 
+###experimental flags ###
 CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
-NCONNECT=32 #
 FORCE_RDMA=0 #this is deprecated/not used anymore.
-NOVMS=0 # not implemented yet
-STARTIP=XXX #not implemented yet
-ENDIP=XXXX #not implemented yet
 
 ###Following are hardcoded and not change-able via args/flags.
-
 USABLE_CNODES=15 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
 NOT_CNODE=0 # this only applies in the lab. leave at 0 normally
 CLIENT_ISL_AVOID=0 # experimental. only for use in the lab. it can change routes.
 ###end vars.###
-
-
-
 
 
 
@@ -136,87 +128,87 @@ while [ $# -gt 0 ]; do
       mVIP="${1#*=}"
       ;;
     --proxy=*)
-    PROXY="${1#*=}"
-    ;;
+      PROXY="${1#*=}"
+      ;;
     --export=*)
       NFSEXPORT="${1#*=}"
       ;;
     --test=*)
-    TEST="${1#*=}"
-    ;;
+      TEST="${1#*=}"
+      ;;
     --runtime=*)
       RUNTIME="${1#*=}"
       RUNTIMEWRITE=$RUNTIME
       ;;
     --proto=*)
-    PROTO="${1#*=}"
-    ;;
+      PROTO="${1#*=}"
+      ;;
     --forcerdma=*)
-    FORCE_RDMA="${1#*=}"
-    ;;
+      FORCE_RDMA="${1#*=}"
+      ;;
     --jobs=*)
-    JOBS="${1#*=}"
-    ;;
+      JOBS="${1#*=}"
+      ;;
     --size=*)
-    SIZE="${1#*=}"
-    ;;
+      SIZE="${1#*=}"
+      ;;
     --mix=*)
-    MIX="${1#*=}"
-    ;;
+      MIX="${1#*=}"
+      ;;
     --block-size=*)
-    BLOCKSIZE="${1#*=}"
-    ;;
+      BLOCKSIZE="${1#*=}"
+      ;;
     --pool=*)
-    POOL="${1#*=}"
-    ;;
+      POOL="${1#*=}"
+      ;;
     --alt-pool=*)
-    ALT_POOL="${1#*=}"
-    ;;
+      ALT_POOL="${1#*=}"
+      ;;
     --path=*)
-    REMOTE_PATH="${1#*=}"
-    ;;
+      REMOTE_PATH="${1#*=}"
+      ;;
     --binary=*)
-    FIO_BIN="${1#*=}"
-    ;;
+      FIO_BIN="${1#*=}"
+      ;;
     --mountpoint=*)
-    MOUNT="${1#*=}"
-    ;;
+      MOUNT="${1#*=}"
+      ;;
     --delete=*)
-    DELETE_ALL="${1#*=}"
-    ;;
+      DELETE_ALL="${1#*=}"
+      ;;
     --ioengine=*)
-    ioengine="${1#*=}"
-    ;;
+      ioengine="${1#*=}"
+      ;;
     --iodepth=*)
-    iodepth="${1#*=}"
-    ;;
+      iodepth="${1#*=}"
+      ;;
     --direct=*)
-    DIRECT="${1#*=}"
-    ;;
+      DIRECT="${1#*=}"
+      ;;
     --usevms=*)
-    USE_VMS="${1#*=}"
-    ;;
+      USE_VMS="${1#*=}"
+      ;;
     --distmode=*)
-    CN_DIST_MODE="${1#*=}"
-    ;;
+      CN_DIST_MODE="${1#*=}"
+      ;;
     --avoid-isl=*)
-    CN_AVOID_ISL="${1#*=}"
-    ;;
+      CN_AVOID_ISL="${1#*=}"
+      ;;
     --loopback=*)
-    LOOPBACK="${1#*=}"
-    ;;
+      LOOPBACK="${1#*=}"
+      ;;
     --user=*)
-    ADMINUSER="${1#*=}"
-    ;;
+      ADMINUSER="${1#*=}"
+      ;;
     --password=*)
-    ADMINPASSWORD="${1#*=}"
-    ;;
+      ADMINPASSWORD="${1#*=}"
+      ;;
     --vipfile=*)
-    VIPFILE="${1#*=}"
-    ;;
+      VIPFILE="${1#*=}"
+      ;;
     --help=*)
-    HELPME="true"
-    ;;
+      HELPME="true"
+      ;;
     *)
       printf "***************************\n"
       printf "* Usage: vast-perf.sh [ --vms=x.x.x.x ] \n"
@@ -224,9 +216,8 @@ while [ $# -gt 0 ]; do
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
       printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
-      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ][--password=123456][--help] \n"
+      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ] [--password=123456] [--help] \n"
       printf "***************************\n"
-      exit 1
       exit 1
   esac
   shift
@@ -248,16 +239,16 @@ if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
   mVIP=`cat /vast/vman/mgmt-vip`
   echo "running on a Vast node. setting VMSIP to ${mVIP}"
   #next block is commented out. as of newer vast-os, rdma should work.
-#  if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ] ; then
-#    echo "on a cnode, not using rdma, falling back to tcp."
-#    PROTO=tcp
-#  fi
-  if [ ${PROTO} == "multipath" ] ; then
+  # if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ]; then
+  #   echo "on a cnode, not using rdma, falling back to tcp."
+  #   PROTO=tcp
+  # fi
+  if [ ${PROTO} == "multipath" ]; then
     echo "can't use multipath on cnode, falling back to regular rdma"
     PROTO=rdma
   fi
 else # if we are running on an external client.
-  if [[ ${mVIP} == "empty" ]] ; then
+  if [[ ${mVIP} == "empty" ]]; then
     echo "You must specify a VMS ip via --vms=x.x.x.x"
     exit 20
   fi
@@ -269,7 +260,7 @@ fi
 
 if [[ ${TEST} == "read_bw_reuse" ]]; then
   #this test is really only valid if you are using RDMA, otherwise you will bottleneck on a single mount per client.
-  if [[ ${IS_VAST} == 1 ]] ; then
+  if [[ ${IS_VAST} == 1 ]]; then
     echo "don't use read_bw_reuse on cnodes. only use this option on external clients if you are using RDMA, OR you have a lot of clients."
     exit 20
   fi
@@ -281,17 +272,14 @@ pools=()
 
 pools+=(${POOL})
 
-
-
-
-if [ "$ALT_POOL" != "empty" ];then
+if [ "$ALT_POOL" != "empty" ]; then
   pools+=" ${ALT_POOL}"
 fi
 
 client_VIPs=""
 all_vips=()
 
-if [ "$PROXY" != "empty" ];then
+if [ "$PROXY" != "empty" ]; then
   export http_proxy=${PROXY}
 fi
 
@@ -299,10 +287,10 @@ fi
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
 
-       # if [ VIPFILE != "empty" ]; then 
-       #   echo "you can't specify --vipfile=${VIPFILE} && looback=1. If you want to use a vipfile, use loopback=0"
-       #   exit 20
-       # fi
+    # if [ VIPFILE != "empty" ]; then
+    #   echo "you can't specify --vipfile=${VIPFILE} && looback=1. If you want to use a vipfile, use loopback=0"
+    #   exit 20
+    # fi
 
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
@@ -324,9 +312,7 @@ for pool in $pools; do
     else
       PROTO=rdma
       echo "setting PROTO to ${PROTO} for now.."
-
     fi
-
 
     if grep -q "Rocky" /etc/redhat-release; then
       PROTO=tcp
@@ -335,17 +321,15 @@ for pool in $pools; do
         echo "Not Rocky, carrying on with ${PROTO}"
     fi
 
-
     # in 4.2, we changed how we name nodes.  So, instead of using node-names in the filter...we will use the internal IP.
     # also, the way this works is different on an IB backend cluster vs an ETH cluster.
     #first..figure out if we have an IB nic for internal
-
 
     export INT_IFACES=$(cat /etc/vast-configure_network.py-params.ini|grep internal_interfaces|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
     export DATA_VLAN=$(cat /etc/vast-configure_network.py-params.ini|grep data_vlan|awk -F "=" {'print $2'}| sed -E 's/,/ /')
 
-    # 
+    #
     if [[ "$INT_IFACES" =~ .*"en".* ]]; then
       echo "ETH backend"
       BOND_IFACE="bond0.${DATA_VLAN}"
@@ -361,55 +345,53 @@ for pool in $pools; do
     fi
 
 
-
-###we need to know what the "inner vip" is.
+    ###we need to know what the "inner vip" is.
 
     export INNER_VIP=$(cat /etc/vast-configure_network.py-params.ini|grep mgmt_inner_vip=|awk -F "=" {'print $2'})
 
     export INT_IP=`/sbin/ip a s ${BOND_IFACE}|grep inet|grep -v inet6|grep -v ${INNER_VIP} | awk {'print $2'}|sed -E 's/\/[0-9]+//'`
-    # query VMS 
+    # query VMS
 
-     if [ $VIPFILE != "empty" ]; then #super experimental
+    if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
-      local_vips="$(cat ${VIPFILE})"   
+      local_vips="$(cat ${VIPFILE})"
     else
       CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
       export local_vips=$(/usr/bin/curl ${CURL_OPTS} -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
-    # old way..commented out.
-      #export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
     fi
-    
-        if [ "x$local_vips" == 'x' ] ; then
-          echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id. Also: make sure that this CNode is a member of the pool you want to test with."
-          exit 20
-        fi
-      for local_vip in ${local_vips}; do
-        local_vip=${local_vip//\"/}
-        all_vips+=(${local_vip})
-      done
+
+    if [ "x$local_vips" == 'x' ]; then
+      echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id. Also: make sure that this CNode is a member of the pool you want to test with."
+      exit 20
+    fi
+
+    for local_vip in ${local_vips}; do
+      local_vip=${local_vip//\"/}
+      all_vips+=(${local_vip})
+    done
   else
     #not loopback..get all the vips in the pool to use.
 
     if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
-      client_VIPs="$(cat ${VIPFILE})"   
+      client_VIPs="$(cat ${VIPFILE})"
     else #use curl to grab the VIPs
       CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
 
-      if [ "$PROXY" != "empty" ];then
+      if [ "$PROXY" != "empty" ]; then
         CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
       fi
 
       client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
     fi
+
     echo $client_VIPs
-    if [ "x$client_VIPs" == 'x' ] ; then
-        echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id"
-        exit 20
+    if [ "x$client_VIPs" == 'x' ]; then
+      echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id"
+      exit 20
     fi
   fi
 done
-
 
 
 if [ $LOOPBACK == 0 ]; then
@@ -423,8 +405,6 @@ if [ $LOOPBACK == 0 ]; then
     all_vips+=(${i})
   done
 fi
-
-
 
 
 ####If we are running on a CNode.
@@ -466,15 +446,15 @@ if [ $IS_VAST == 1 ]; then
     export iface_count=`echo $EXT_IFACES | wc -w`
     echo "interface count is $iface_count"
 
-    if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ] ; then 
+    if [ $iface_count -eq 2 ] && [ $CN_AVOID_ISL == 1 ]; then
       # sometimes the route is OK, sometimes its not,  check them all and only change if they are 'wrong'
       if [ $VLAN_ID != "empty" ] && [ $VLAN_IFACES != "empty" ]; then #super experimental
         EXT_IFACES=$VLAN_IFACES.$VLAN_ID
         for iface in $EXT_IFACES; do
           export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
-          for IP in ${IPS_TO_ROUTE}; do # 
+          for IP in ${IPS_TO_ROUTE}; do #
             current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+\.[0-9]+'|awk {'print $2'}`
-            if [[ ${current_route} == $iface ]] ; then
+            if [[ ${current_route} == $iface ]]; then
               echo "route is OK for $IP -> $iface , skipping"
             else
               echo "temporarily changing route for $IP -> $iface"
@@ -482,15 +462,14 @@ if [ $IS_VAST == 1 ]; then
             fi
           done
         done
-            
-      else # this is the 'normal' path
 
+      else # this is the 'normal' path
         for iface in $EXT_IFACES; do #this won't work if there is a vlan tag on the pool.
           export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
           #now check what the route looks like on this node for each ip.
-          for IP in ${IPS_TO_ROUTE}; do 
+          for IP in ${IPS_TO_ROUTE}; do
             current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
-            if [[ ${current_route} == $iface ]] ; then
+            if [[ ${current_route} == $iface ]]; then
               echo "route is OK for $IP -> $iface , skipping"
             else
               echo "temporarily changing route for $IP -> $iface"
@@ -509,8 +488,7 @@ fi
 
 #build the list of vips to actually mount.
 #
-if [ $IS_VAST == 1 ] && [ "$CN_DIST_MODE" == "modulo" ];then
-
+if [ $IS_VAST == 1 ] && [ "$CN_DIST_MODE" == "modulo" ]; then
   #figure out what node we are on.
   export NODENUM=`grep node /etc/vast-configure_network.py-params.ini |egrep -o 'node=[0-9]+'|awk -F '=' {'print $2'}`
   echo "$NODENUM here"
@@ -530,11 +508,9 @@ else
   needed_vips=()
   for ((idx=0; idx<${JOBS} && idx<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
-#    echo "${all_vips[$idx]} is in the mix"
+    # echo "${all_vips[$idx]} is in the mix"
   done
 fi
-
-#echo "needed: ${needed_vips}"
 
 
 #check vip list to make sure there are vips to mount, otherwise fail
@@ -544,20 +520,20 @@ fi
 avoid_isl_func () {
   # experimental.  this only applies if you are NOT running on cnodes, since we already have a hack for that.
   # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
-  if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ] ; then
+  if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ]; then
     #basically, we need to find out if the CNode iface matches the client.
     # for that..ssh key must work to the VMS-ip.
     # what we do is ssh to the VMS ip, do a 'clush' looking for the various ip's, and make a list.
-    # Then, we have to look at the client side IPs, and determine if the iface which is on the same 'subnet' will 
+    # Then, we have to look at the client side IPs, and determine if the iface which is on the same 'subnet' will
     # be able to talk directly to the iface on the CNode.  This assumes that the clients have ib0 on the same switch
     # that the cnode has ib0 on.
     CLIENT_IFACES="ib0 ib1"
-    for iface in $CLIENT_IFACES; do 
+    for iface in $CLIENT_IFACES; do
       export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
       #now check what the route looks like on this node for each ip.
-      for IP in ${IPS}; do 
+      for IP in ${IPS}; do
         current_route=`/sbin/ip route get ${IP}|egrep -o 'dev \w+'|awk {'print $2'}`
-        if [[ ${current_route} == $iface ]] ; then
+        if [[ ${current_route} == $iface ]]; then
           echo "route is OK for $IP -> $iface , skipping"
         else
           echo "temporarily changing route for $IP -> $iface"
@@ -565,35 +541,28 @@ avoid_isl_func () {
         fi
       done
     done
-
   fi
 }
 
 remove_isl_func() {
-    # experimental.  this only applies if you are NOT running on cnodes, since we already have a hack for that.
+  # experimental.  this only applies if you are NOT running on cnodes, since we already have a hack for that.
   # this is only really useful in the lab, where we have clients directly attached to same switches as clusters.
-  if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ] ; then
+  if [ $IS_VAST == 0 ] && [ "$CLIENT_ISL_AVOID" == 1 ]; then
     CLIENT_IFACES="ib0 ib1"
-    for iface in $CLIENT_IFACES
-      do export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
+    for iface in $CLIENT_IFACES; do
+      export IPS=`ssh vastdata@${mVIP} clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $1'}`
       #now check what the route looks like on this node for each ip.
-      for IP in ${IPS}
-      #this just deletes all /32 routes that we might have..
-        do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
+      for IP in ${IPS}; do
+        #this just deletes all /32 routes that we might have..
+        sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
       done
     done
-
   fi
-
 }
-
 
 
 #force unmount anything that might have been mounted last time this was run.
 sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
-
-
-
 
 
 mount_func () {
@@ -602,77 +571,69 @@ mount_func () {
   DIRS=()
   MD_DIRS=()
 
-  for i in ${needed_vips[@]}
-          do sudo mkdir -p ${MOUNT}/${i}
-          if [[ ${PROTO} == "rdma" ]] ; then
-            echo "sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
-            sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
-            if [ $? -eq 0 ]; then 
-              echo "mounted ${MOUNT} ok"
-            else 
-              echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
-              #cleanup
-              exit
-            fi
-          else
-            sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
-            if [ $? -eq 0 ]; then 
-              echo "mounted ${MOUNT} ok"
-            else 
-              echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
-              cleanup
-              exit
-            fi
-          fi
-          export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
-          DIRS+=${fio_dir}:
-          sudo mkdir -p ${fio_dir}
-          sudo chmod 777 ${fio_dir}
+  for i in ${needed_vips[@]}; do
+    sudo mkdir -p ${MOUNT}/${i}
+    if [[ ${PROTO} == "rdma" ]]; then
+      echo "sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
+      sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+      if [ $? -eq 0 ]; then
+        echo "mounted ${MOUNT} ok"
+      else
+        echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
+        #cleanup
+        exit
+      fi
+    else
+      sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+      if [ $? -eq 0 ]; then
+        echo "mounted ${MOUNT} ok"
+      else
+        echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
+        cleanup
+        exit
+      fi
+    fi
+    export fio_dir=${MOUNT}/$i/${REMOTE_PATH}/${node}
+    DIRS+=${fio_dir}:
+    sudo mkdir -p ${fio_dir}
+    sudo chmod 777 ${fio_dir}
   done
 
   echo ${DIRS}
-
 }
 
 multipath_func () {
-#basically we want to build a mount command
-# which uses all VIPs.  I believe the limit with current multipath driver
-# is 32, so we'll set a limit of that.
-#
+  #basically we want to build a mount command
+  # which uses all VIPs.  I believe the limit with current multipath driver
+  # is 32, so we'll set a limit of that.
+  #
 
-# first, shuffle
-all_vips=( $(shuf -e "${all_vips[@]}") )
+  # first, shuffle
+  all_vips=( $(shuf -e "${all_vips[@]}") )
   needed_vips=()
   for ((idx=0; idx<${JOBS} && idx<${#all_vips[@]}; ++idx)); do
     needed_vips+=(${all_vips[$idx]})
   done
-
-# next, we 
-
 }
 
 
 write_bw_test () {
-if [ -z ${RUNTIMEWRITE} ]; then
-  #didn't specify runtime, so just create files of size specified
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS}
-else
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
-fi
-
+  if [ -z ${RUNTIMEWRITE} ]; then
+    #didn't specify runtime, so just create files of size specified
+    ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS}
+  else
+    ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  fi
 }
 
 seq_write_test () {
-if [ -z ${RUNTIMEWRITE} ]; then
-  #didn't specify runtime, so just create files of size specified
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=write --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS}
-else
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=write --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
-fi
-
+  if [ -z ${RUNTIMEWRITE} ]; then
+    #didn't specify runtime, so just create files of size specified
+    ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=write --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS}
+  else
+    ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=write --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  fi
 }
-
-
 
 read_bw_test () {
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --iodepth=${iodepth} --rw=randread --bs=${BLOCKSIZE} --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME} $EXTRA_FIO_ARGS
@@ -681,7 +642,6 @@ read_bw_test () {
 
 write_iops_test () {
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=0 --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
-
 }
 
 read_iops_test () {
@@ -689,21 +649,17 @@ read_iops_test () {
 }
 
 mix_bw_test () {
-if [ -z ${RUNTIMEWRITE} ]; then
-  #didn't specify runtime, so just create files of size specified
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=${MIX} --group_reporting --directory=${DIRS}
-else
-  ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=${MIX} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
-fi
-
+  if [ -z ${RUNTIMEWRITE} ]; then
+    #didn't specify runtime, so just create files of size specified
+    ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=${MIX} --group_reporting --directory=${DIRS}
+  else
+    ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=1mb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=${MIX} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
+  fi
 }
-
 
 mix_iops_test () {
   ${FIO_BIN} --name=randrw --ioengine=${ioengine} --refill_buffers --create_serialize=0 --randrepeat=0 --create_on_open=1 --fallocate=none --iodepth=${iodepth} --rw=randrw --bs=4kb --direct=${DIRECT} --size=${SIZE} --numjobs=${JOBS} --rwmixread=${MIX} --group_reporting --directory=${DIRS} --time_based=1 --runtime=${RUNTIME}
-
 }
-
 
 #only use if you know what you are doing.
 read_bw_reuse_test () {
@@ -719,7 +675,7 @@ cleanup() {
   echo "I'm only cleaning up..."
   pkill fio
   # this will clean up anything in dirs
-  if [[ $DELETE_ALL -eq 1 ]] ; then
+  if [[ $DELETE_ALL -eq 1 ]]; then
     echo "deleting all created files"
     sudo rm -rvf ${MOUNT}/${needed_vips[0]}/${REMOTE_PATH}/${node}
     sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
@@ -730,25 +686,23 @@ cleanup() {
     sudo umount -lf ${MOUNT}/* >/dev/null 2>/dev/null
   fi
 
-
-  
-  if [ $IS_VAST == 1 ] && [ $CN_AVOID_ISL == 1 ]; then 
-    if [[ $iface_count -eq 2 ]] ; then
+  if [ $IS_VAST == 1 ] && [ $CN_AVOID_ISL == 1 ]; then
+    if [[ $iface_count -eq 2 ]]; then
       if [ $VLAN_ID != "empty" ] && [ $VLAN_IFACES != "empty" ]; then #super experimental
-          EXT_IFACES=$VLAN_IFACES.$VLAN_ID
-          for iface in $EXT_IFACES; do
-            export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
-            for IP in ${IPS_TO_ROUTE}; do 
-                echo "not doing route deletion..beware."
-                #sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
-            done
+        EXT_IFACES=$VLAN_IFACES.$VLAN_ID
+        for iface in $EXT_IFACES; do
+          export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+          for IP in ${IPS_TO_ROUTE}; do
+            echo "not doing route deletion..beware."
+            #sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
           done
+        done
       else #the normal path
-        for iface in $EXT_IFACES
-          do export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
-          for IP in ${IPS_TO_ROUTE}
-          # a little heavy handed, but its OK.
-            do sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
+        for iface in $EXT_IFACES; do
+          export IPS_TO_ROUTE=$(clush -g cnodes "/sbin/ip a s ${iface} | egrep ':vip[0-9]+|:v[0-9]+'|egrep -o '[0-9]{1,3}*\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"|awk {'print $2'})
+          for IP in ${IPS_TO_ROUTE}; do
+            # a little heavy handed, but its OK.
+            sudo /sbin/ip route del ${IP}/32 dev ${iface} >/dev/null 2>1
           done
         done
       fi
@@ -757,7 +711,6 @@ cleanup() {
     fi
   fi
   remove_isl_func
-
 }
 
 avoid_isl_func
@@ -766,46 +719,44 @@ avoid_isl_func
 ####end all functions.#####
 
 
-if [[ ${TEST} == "read_bw" ]] ; then
+if [[ ${TEST} == "read_bw" ]]; then
   mount_func
   read_bw_test
   cleanup
-elif [[ ${TEST} == "write_bw" ]] ; then
+elif [[ ${TEST} == "write_bw" ]]; then
   mount_func
   write_bw_test
   cleanup
-
-elif [[ ${TEST} == "seq_write_bw" ]] ; then
+elif [[ ${TEST} == "seq_write_bw" ]]; then
   mount_func
   seq_write_test
   cleanup
-elif [[ ${TEST} == "write_iops" ]] ; then
+elif [[ ${TEST} == "write_iops" ]]; then
   mount_func
   write_iops_test
   cleanup
-elif [[ ${TEST} == "read_iops" ]] ; then
+elif [[ ${TEST} == "read_iops" ]]; then
   mount_func
   read_iops_test
   cleanup
-elif [[ ${TEST} == "mix_bw" ]] ; then
+elif [[ ${TEST} == "mix_bw" ]]; then
   mount_func
   mix_bw_test
   cleanup
-elif [[ ${TEST} == "mix_iops" ]] ; then
+elif [[ ${TEST} == "mix_iops" ]]; then
   mount_func
   mix_iops_test
   cleanup
-elif [[ ${TEST} == "read_bw_reuse" ]] ; then
+elif [[ ${TEST} == "read_bw_reuse" ]]; then
   mount_func
   read_bw_reuse_test
   cleanup
-elif [[ ${TEST} == "cleanup" ]] ; then
+elif [[ ${TEST} == "cleanup" ]]; then
   mount_func
   cleanup
-elif [[ ${TEST} == "mount_only" ]] ; then
+elif [[ ${TEST} == "mount_only" ]]; then
   mount_func
   echo "done mounting, existing and leaving mounts. if you want to unmount, run with --test=cleanup"
 else
   echo "you didn't specify a valid test. unmounting and exiting"
 fi
-
