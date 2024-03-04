@@ -91,6 +91,7 @@ DIRECT=1 # o_direct or not..
 ADMINUSER="admin"
 ADMINPASSWORD=123456
 LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this requires a lot of vips..
+VERBOSE=1 # verbosely output details, may be too noisy on large clusters
 
 ###experimental flags ###
 CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
@@ -165,7 +166,9 @@ mount_func () {
       mount_cmd="sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
       mount_output=$(eval $mount_cmd 2>&1)
       if [ $? -eq 0 ]; then
-        echo "mounted ${MOUNT}/${i} ok"
+        if [ ${VERBOSE} -eq 1 ]; then
+          echo "mounted ${MOUNT}/${i} ok"
+        fi
       else
         echo "mount of ${MOUNT}/${i} failed : $? , going to unmount everything and exit"
         echo "Command: $mount_cmd"
@@ -178,7 +181,9 @@ mount_func () {
       mount_cmd="sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
       mount_output=$(eval $mount_cmd 2>&1)
       if [ $? -eq 0 ]; then
-        echo "mounted ${MOUNT}/${i} ok"
+        if [ ${VERBOSE} -eq 1 ]; then
+          echo "mounted ${MOUNT}/${i} ok"
+        fi
       else
         echo "mount of ${MOUNT}/${i} failed : $? , going to unmount everything and exit"
         echo "Command: $mount_cmd"
@@ -405,6 +410,9 @@ while [ $# -gt 0 ]; do
     --password=*)
       ADMINPASSWORD="${1#*=}"
       ;;
+    --verbose=*)
+      VERBOSE="${1#*=}"
+      ;;
     --vipfile=*)
       VIPFILE="${1#*=}"
       ;;
@@ -413,7 +421,7 @@ while [ $# -gt 0 ]; do
       ;;
     *)
       printf "***************************\n"
-      printf "* Usage: vast-perf.sh [ --vms=x.x.x.x ] \n"
+      printf "* Usage: vast-perf.sh [--verbose=1] [ --vms=x.x.x.x ] \n"
       printf "* [ --export=/ ] [ --test=read_bw ] [ --runtime=120 ]\n"
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
