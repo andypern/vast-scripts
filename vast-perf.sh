@@ -74,7 +74,7 @@ JOBS=8 # how many threads per host. This will also result in N mountpoints per h
 SIZE="20g" # size of each file, one per thread.
 BLOCKSIZE="1mb" #leave alone for max b/w. Note that this only applies to the b/w tests, for iops tests it will be 4kb (hardcoded)
 MIX=100 # only applicable if TEST="mix_bw" or "mix_iops"
-POOL=1 # what pool to run on, typically this will be '1', but check!
+POOL=2 # what pool to run on, typically this will be '2', but check!
 PROTO="tcp" #rdma or tcp.  When in doubt, use tcp
 REMOTE_PATH="fio" # change this to whatever you want it to be. This is the subdir underneath the export which will be created.
 FIO_BIN=/usr/bin/fio #location where fio binary exists.
@@ -480,6 +480,7 @@ if [ "$PROXY" != "empty" ]; then
   export http_proxy=${PROXY}
 fi
 
+CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} -H 'accept: application/json' --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
 
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
@@ -553,12 +554,13 @@ for pool in $pools; do
       # grab the vips from a file..which must be formatted perfectly..or you die.
       local_vips="$(cat ${VIPFILE})"
     else
-      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
-      export local_vips=$(/usr/bin/curl ${CURL_OPTS} -H "accept: application/json" --insecure -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}"| jq '.[] | .ip')
+      export local_vips=$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}&cnode__ip=${INT_IP}" | jq '.[] | .ip')
     fi
 
     if [ "x$local_vips" == 'x' ]; then
       echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id. Also: make sure that this CNode is a member of the pool you want to test with."
+      echo "Available VIP pools:"
+      /usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vippools/" | jq -c 'sort_by(.id) | .[] | {id, name, ranges_summary}'
       exit 20
     fi
 
@@ -573,18 +575,18 @@ for pool in $pools; do
       # grab the vips from a file..which must be formatted perfectly..or you die.
       client_VIPs="$(cat ${VIPFILE})"
     else #use curl to grab the VIPs
-      CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
-
       if [ "$PROXY" != "empty" ]; then
         CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
       fi
 
-      client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | grep -Po '"ip":"[0-9\.]*",' | awk -F'"' '{print $4}' | sort -t'.' -k4 -n | tr '\n' ' ')"
+      client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | jq -r '.[] | .ip' | sort -t'.' -k4 -n | tr '\n' ' ')"
     fi
 
     echo $client_VIPs
     if [ "x$client_VIPs" == 'x' ]; then
       echo "Failed to retrieve cluster virtual IPs for client access using VIP pool ID ${pool}, check VMSip or pool-id"
+      echo "Available VIP pools:"
+      /usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vippools/" | jq -c 'sort_by(.id) | .[] | {id, name, ranges_summary}'
       exit 20
     fi
   fi
