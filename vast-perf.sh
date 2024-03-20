@@ -91,12 +91,12 @@ DIRECT=1 # o_direct or not..
 ADMINUSER="admin"
 ADMINPASSWORD=123456
 LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this requires a lot of vips..
+VERBOSE=1 # verbosely output details, may be too noisy on large clusters
 
 ###experimental flags ###
 CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
-FORCE_RDMA=0 #this is deprecated/not used anymore.
 
 ###Following are hardcoded and not change-able via args/flags.
 USABLE_CNODES=15 #this isn't changable via OPTS. its experimental. Use the --usevms=1/0 flag instead.
@@ -157,24 +157,38 @@ mount_func () {
   DIRS=()
   MD_DIRS=()
 
+  # Do the mounts. Stash away the command and the verbose output format
+  # but only output them on mount failure to reduce noise.
+
   for i in ${needed_vips[@]}; do
     sudo mkdir -p ${MOUNT}/${i}
     if [[ ${PROTO} == "rdma" ]]; then
-      echo "sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
-      sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+      mount_cmd="sudo mount -v -t nfs -o retry=0,proto=rdma,soft,port=20049,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
+      mount_output=$(eval $mount_cmd 2>&1)
       if [ $? -eq 0 ]; then
-        echo "mounted ${MOUNT} ok"
+        if [ ${VERBOSE} -eq 1 ]; then
+          echo "mounted ${MOUNT}/${i} ok"
+        fi
       else
-        echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
-        #cleanup
+        echo "mount of ${MOUNT}/${i} failed : $? , going to unmount everything and exit"
+        echo "Command: $mount_cmd"
+        echo "Output:"
+        echo "$mount_output"
+        cleanup
         exit
       fi
     else
-      sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}
+      mount_cmd="sudo mount -v -t nfs -o retry=0,tcp,soft,rw,vers=3 ${i}:${NFSEXPORT} ${MOUNT}/${i}"
+      mount_output=$(eval $mount_cmd 2>&1)
       if [ $? -eq 0 ]; then
-        echo "mounted ${MOUNT} ok"
+        if [ ${VERBOSE} -eq 1 ]; then
+          echo "mounted ${MOUNT}/${i} ok"
+        fi
       else
-        echo "mount of ${MOUNT} failed : $? , going to unmount everything and exit"
+        echo "mount of ${MOUNT}/${i} failed : $? , going to unmount everything and exit"
+        echo "Command: $mount_cmd"
+        echo "Output:"
+        echo "$mount_output"
         cleanup
         exit
       fi
@@ -184,8 +198,6 @@ mount_func () {
     sudo mkdir -p ${fio_dir}
     sudo chmod 777 ${fio_dir}
   done
-
-  echo ${DIRS}
 }
 
 multipath_func () {
@@ -341,9 +353,6 @@ while [ $# -gt 0 ]; do
     --proto=*)
       PROTO="${1#*=}"
       ;;
-    --forcerdma=*)
-      FORCE_RDMA="${1#*=}"
-      ;;
     --jobs=*)
       JOBS="${1#*=}"
       ;;
@@ -401,6 +410,9 @@ while [ $# -gt 0 ]; do
     --password=*)
       ADMINPASSWORD="${1#*=}"
       ;;
+    --verbose=*)
+      VERBOSE="${1#*=}"
+      ;;
     --vipfile=*)
       VIPFILE="${1#*=}"
       ;;
@@ -409,7 +421,7 @@ while [ $# -gt 0 ]; do
       ;;
     *)
       printf "***************************\n"
-      printf "* Usage: vast-perf.sh [ --vms=x.x.x.x ] \n"
+      printf "* Usage: vast-perf.sh [--verbose=1] [ --vms=x.x.x.x ] \n"
       printf "* [ --export=/ ] [ --test=read_bw ] [ --runtime=120 ]\n"
       printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
       printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
@@ -434,14 +446,30 @@ if  [ -f "/vast/vman/mgmt-vip" ] && [ $NOT_CNODE == 0 ]; then
   IS_VAST=1
   mVIP=`cat /vast/vman/mgmt-vip`
   echo "running on a Vast node. setting VMSIP to ${mVIP}"
-  #next block is commented out. as of newer vast-os, rdma should work.
-  # if [ ${PROTO} == "rdma" ] && [ ${FORCE_RDMA} == "0" ]; then
-  #   echo "on a cnode, not using rdma, falling back to tcp."
-  #   PROTO=tcp
-  # fi
+
   if [ ${PROTO} == "multipath" ]; then
     echo "can't use multipath on cnode, falling back to regular rdma"
     PROTO=rdma
+  fi
+
+  # Nowadays, vast-OS supports RDMA so default to it when running on loopback
+  # mode, but first check two exceptions: Broadcom NICs & Rocky
+
+  # Check for the Broadcom driver
+  LSMOD=`sudo lsmod|grep bnxt_en|wc -l`
+  if [ "$LSMOD" -gt "0" ]; then
+    PROTO=tcp
+    echo "setting PROTO to ${PROTO} because broadcom"
+
+  # Check for Rocky
+  elif grep -q "Rocky" /etc/redhat-release; then
+    PROTO=tcp
+    echo "setting PROTO to ${PROTO} because rocky"
+
+  # by default, use RDMA
+  else
+    PROTO=rdma
+    echo "setting PROTO to ${PROTO} because cnode"
   fi
 else # if we are running on an external client.
   if [[ ${mVIP} == "empty" ]]; then
@@ -491,32 +519,6 @@ for pool in $pools; do
 
     # only mount local vips on the CNode. Note that if there are less vips per CNode than jobs, then some jobs
     # will re-use the same VIPs, which will not necessarily give the b/w you desire..ideally you have at least 5 mounts per CNode.
-
-    #nowadays..vast-OS supports RDMA.  So, default to it when running on loopback mode. The exception is on broadcom NIC's.
-    # basically:
-    # 1.  check the internal_virtual ifaces to see if 'ens95s..' shows up. that is a bcm. another way to check is to look for the driver: `sudo lsmod|grep bnxt_en|wc -l`
-    # 2.  check to see if it is a single or dual-NIC cnode. If its single NIC, then flip to TCP.  If its dual-NIC, then maybe we can do RDMA? For now, just flip to TCP.
-    #
-
-    IS_BCM=0
-
-    LSMOD=`sudo lsmod|grep bnxt_en|wc -l`
-
-    if [ "$LSMOD" -gt "0" ]; then
-      export IS_BCM=1
-      PROTO=tcp
-      echo "setting PROTO to ${PROTO} because broadcom"
-    else
-      PROTO=rdma
-      echo "setting PROTO to ${PROTO} for now.."
-    fi
-
-    if grep -q "Rocky" /etc/redhat-release; then
-      PROTO=tcp
-      echo "setting PROTO to ${PROTO} because rocky"
-    else
-        echo "Not Rocky, carrying on with ${PROTO}"
-    fi
 
     # in 4.2, we changed how we name nodes.  So, instead of using node-names in the filter...we will use the internal IP.
     # also, the way this works is different on an IB backend cluster vs an ETH cluster.
