@@ -311,6 +311,54 @@ cleanup() {
   remove_isl_func
 }
 
+showusage() {
+  # the alignment of the arguments below is weird because they are meant
+  # to align in the output after variable substitution
+  cat << EOF
+Usage: vast-perf.sh --test=TEST [optional args]
+Available tests ---------------------------------------------------------------
+  --test=TEST            test to run, one of:
+      read_bw, write_bw, seq_write_bw, write_iops, read_iops,
+      mix_bw, mix_ops, reuse_bw_reuse, cleanup, mount_only
+
+Optional arguments with their defaults ----------------------------------------
+misc options
+  --delete=$DELETE_ALL             delete files upon completion?
+  --verbose=$VERBOSE            include verbose output?
+
+fio options
+  --binary=$FIO_BIN  path to fio
+  --runtime=$RUNTIME          runtime of the test in seconds
+  --jobs=$JOBS               number of fio jobs to run
+  --size=$SIZE             size of the files to read/write
+  --block-size=$BLOCKSIZE       read/write blocksize
+  --direct=$DIRECT             use O_DIRECT?
+  --ioengine=$ioengine      ioengine to use with fio
+  --iodepth=$iodepth            iodepth to use with fio
+  --mix=$MIX              read/write mix, only used for "mix_bw" or "mix_iops"
+
+mount-related options
+  --proto=$PROTO            mount protocol (auto-detected)
+  --mountpoint=$MOUNT
+                         mount point on cnode
+  --export=$NFSEXPORT             NFS export from the cluster
+  --path=$REMOTE_PATH             directory under the mountpoint to place files
+  --loopback=$LOOPBACK           use loopback mounts
+
+cluster options
+  --usevms=$USE_VMS          use VMS node in the test load? (auto-detected)
+  --pool=$POOL               vippool to run against
+
+advanced options -- you shouldn't need any of these when running on cnodes
+ --vms=$mVIP             VMS VIP (auto-detected when run on cnode)
+ --proxy=$PROXY           proxy in the form of ip:port
+ --user=$ADMINUSER            admin username
+ --password=$ADMINPASSWORD       admin password
+
+Note: experimental options are not included.
+EOF
+}
+
 
 #=============================================================================
 # Main program
@@ -420,14 +468,7 @@ while [ $# -gt 0 ]; do
       HELPME="true"
       ;;
     *)
-      printf "***************************\n"
-      printf "* Usage: vast-perf.sh [--verbose=1] [ --vms=x.x.x.x ] \n"
-      printf "* [ --export=/ ] [ --test=read_bw ] [ --runtime=120 ]\n"
-      printf "* [--proto=tcp ] [ --jobs=8 ] [ --pool=1 ] \n"
-      printf "* [--path=fiotest ] [--binary=/usr/bin/fio ] [--mountpoint=/mnt/fiotest ] \n"
-      printf "* [--delete=0 ] [--ioengine=libaio ] [--usevms=true] \n"
-      printf "* [--distmode=modulo ] [--avoid-isl=0 ] [--loopback=0 ] [--password=123456] [--help] \n"
-      printf "***************************\n"
+      showusage
       exit 1
   esac
   shift
