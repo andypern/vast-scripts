@@ -11,7 +11,7 @@
 ####Background/details##
 ##If you are running on a Vast-Cnode
 
-## if you use 'modulo' for CN_DIST_MODE (the default) , it will require a larger VIP pool, specifically ()$numCNodes + $JOBS) - 1.  You can also just choose '--distmode=random'
+# If you use 'modulo' for CN_DIST_MODE, it will require a larger VIP pool, specifically ($numCNodes + $JOBS) - 1.
 # If running on a cluster with more than 8 CNodes, the script will not execute on the node holding VMS (this is to prevent OOM issues)
 # If you notice issues on 8CN or smaller clusters where VMS crashes, set --usevms=false
 # If you choose 'RDMA', the script will automatically change to TCP, because Vast-CNodes do not have RDMA-client packages.
@@ -66,7 +66,6 @@
 # Don't set these variables directly, use the '--' args.
 
 mVIP="empty"  # the VMS-VIP of the vast cluster you are testing against. If you run on CNodes, don't worry about setting.  If you run on an external client, you must specify the VMS-VIP with --vms=ip
-VIPFILE="empty" #use at own risk.
 NFSEXPORT="/" # the NFS export to use.  On a brand new cluster use '/' (no quotes)
 TEST="read_bw" # one of 'write_bw' , 'read_bw', 'write_iops' , 'read_iops' , 'cleanup'
 RUNTIME=120 # runtime in seconds of the test.
@@ -84,7 +83,6 @@ ioengine=libaio #use libaio most of the time. other options: posixaio
 iodepth=8 #For b/w tests, lower values can result in slightly better latency.  For IOPS tests, higher values can yield higher IOps
 USE_VMS="true" # should the VMS cnodes also be a client?  Note that in clusters larger than USABLE_CNODES , vms won't be used even if this is set to 1.
 CN_DIST_MODE=random #or 'modulo' ( experimental ) .  Only applies to running on a vast-cnode.
-ALT_POOL="empty" # experimental. don't set this or use --alt-pool "2 3 4 5" option.
 PROXY="empty" #use IP:port if you need a proxy to get to VMS.
 EXTRA_FIO_ARGS=" --numa_mem_policy=local --gtod_reduce=1 --clocksource=cpu --refill_buffers --randrepeat=0 --create_serialize=0 --random_generator=lfsr --fallocate=none" #don't change these unless you know...
 DIRECT=1 # o_direct or not..
@@ -93,7 +91,9 @@ ADMINPASSWORD=123456
 LOOPBACK=1 # only applies when running on cnodes. default is on now. BUT: this requires a lot of vips..
 
 ###experimental flags ###
+VIPFILE="empty" #use at own risk.
 CN_AVOID_ISL=0 # only set this to 1 if you are in the lab or know what you are doing. if there are bugs, it can screw up routing.
+ALT_POOL="empty" # experimental. don't set this or use --alt-pool "2 3 4 5" option.
 VLAN_ID="empty" # only useful if we are attempting to modify routing (CN_AVOID_ISL=1)
 VLAN_IFACES="empty" # a hack for now. we need to know what the vlan ifaces are. used in conjuction with VLAN_ID & CN_AVOID_ISL
 FORCE_RDMA=0 #this is deprecated/not used anymore.
