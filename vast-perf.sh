@@ -521,7 +521,19 @@ else # if we are running on an external client.
   LOOPBACK=0
 fi
 
+# Confirm we can connect to mVIP
+CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} -H 'accept: application/json' --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
 
+if [ "$PROXY" != "empty" ]; then
+  export http_proxy=${PROXY}
+  CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
+fi
+
+response_code=$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vippools/" --write-out "\n%{http_code}\\n" | tail -1)
+if [ "$response_code" != "200" ]; then
+  echo "Unable to connect to VMS, confirm username & password are correct."
+  exit 20
+fi
 
 if [[ ${TEST} == "read_bw_reuse" ]]; then
   #this test is really only valid if you are using RDMA, otherwise you will bottleneck on a single mount per client.
@@ -544,12 +556,6 @@ fi
 
 client_VIPs=""
 all_vips=()
-
-if [ "$PROXY" != "empty" ]; then
-  export http_proxy=${PROXY}
-fi
-
-CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} -H 'accept: application/json' --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
 
 for pool in $pools; do
   if [ $LOOPBACK == 1 ]; then
@@ -617,11 +623,8 @@ for pool in $pools; do
     if [ $VIPFILE != "empty" ]; then #super experimental
       # grab the vips from a file..which must be formatted perfectly..or you die.
       client_VIPs="$(cat ${VIPFILE})"
-    else #use curl to grab the VIPs
-      if [ "$PROXY" != "empty" ]; then
-        CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
-      fi
-
+    else
+      # use curl to grab the VIPs
       client_VIPs+="$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vips/?vippool__id=${pool}" | jq -r '.[] | .ip' | sort -t'.' -k4 -n | tr '\n' ' ')"
     fi
 
