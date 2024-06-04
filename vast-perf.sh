@@ -521,14 +521,23 @@ else # if we are running on an external client.
   LOOPBACK=0
 fi
 
-# Confirm we can connect to mVIP
-CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} -H 'accept: application/json' --insecure --ciphers ECDHE-RSA-AES128-GCM-SHA256"
+# Build our curl options
+CURL_OPTS="-s -u ${ADMINUSER}:${ADMINPASSWORD} -H 'accept: application/json' --insecure"
 
 if [ "$PROXY" != "empty" ]; then
   export http_proxy=${PROXY}
   CURL_OPTS="${CURL_OPTS} -x ${PROXY}"
 fi
 
+# Try to use the updated cipher
+/usr/bin/curl ${CURL_OPTS} --ciphers ECDHE-RSA-AES128-GCM-SHA256 -X GET "https://$mVIP/api/basesettings/" > /dev/null
+if [ "$?" != "59" ]; then
+  CURL_OPTS="${CURL_OPTS} --ciphers ECDHE-RSA-AES128-GCM-SHA256"
+else
+  echo "WARNING: Your vast-os is old as cipher ECDHE-RSA-AES128-GCM-SHA256 is not supported!"
+fi
+
+# Confirm we can connect to mVIP
 response_code=$(/usr/bin/curl ${CURL_OPTS} -X GET "https://$mVIP/api/vippools/" --write-out "\n%{http_code}\\n" | tail -1)
 if [ "$response_code" != "200" ]; then
   echo "Unable to connect to VMS, confirm username & password are correct."
